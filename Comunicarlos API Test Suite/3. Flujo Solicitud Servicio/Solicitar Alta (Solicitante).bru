@@ -1,0 +1,29 @@
+meta {
+  name: Solicitar Alta (Solicitante)
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{base_url}}/api/v1/servicios/solicitar-alta
+  body: json
+  auth: inherit
+}
+
+headers {
+  Authorization: Bearer {{token_solicitante}}
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "tipoServicio": "TELEVISION",
+    "planDeseado": "Pack HD Premium",
+    "direccionInstalacion": "Calle Falsa 123",
+    "comentarios": "Llamar antes de venir"
+  }
+}
+
+settings {
+  encodeUrl: true
+}

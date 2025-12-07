@@ -1,0 +1,26 @@
+meta {
+  name: Agregar Comentario (Tecnico)
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{base_url}}/api/v1/requerimientos/{{id_incidente}}/comentarios
+  body: json
+  auth: inherit
+}
+
+headers {
+  Authorization: Bearer {{token_tecnico}}
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "texto": "Revisando la conexión del nodo principal. Parece haber ruido en la línea."
+  }
+}
+
+settings {
+  encodeUrl: true
+}

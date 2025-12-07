@@ -1,0 +1,26 @@
+meta {
+  name: Configurar Supervision
+  type: http
+  seq: 9
+}
+
+post {
+  url: {{base_url}}/api/v1/usuarios/supervisores/me/supervisados
+  body: json
+  auth: inherit
+}
+
+headers {
+  Authorization: Bearer {{token_supervisor}}
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "tecnicoId": {{id_tecnico}}
+  }
+}
+
+settings {
+  encodeUrl: true
+}

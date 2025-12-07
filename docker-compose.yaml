@@ -1,0 +1,66 @@
+services:
+  # Servicio de MongoDB
+  mongodb:
+    image: mongo:7.0
+    container_name: mesa_ayuda_mongodb
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_DATABASE: mesa_ayuda_db
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+      - ./mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
+    networks:
+      - mesa_ayuda_network
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/mesa_ayuda_db --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Servicio de la API FastAPI
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mesa_ayuda_api
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - MONGODB_URL=mongodb://mongodb:27017
+      - MONGODB_DB_NAME=mesa_ayuda_db
+      - SECRET_KEY=${SECRET_KEY:-your-secret-key-change-in-production}
+      - DEBUG=True
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - mesa_ayuda_network
+    volumes:
+      - ./app:/app/app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8080 --reload
+# Servicio de Mongo Express (visualización web de MongoDB)
+  mongo-express:
+    image: mongo-express:latest
+    container_name: mesa_ayuda_mongo_express
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    environment:
+      ME_CONFIG_MONGODB_URL: mongodb://mongodb:27017/
+      ME_CONFIG_BASICAUTH_USERNAME: admin
+      ME_CONFIG_BASICAUTH_PASSWORD: admin123
+    depends_on:
+      - mongodb
+    networks:
+      - mesa_ayuda_network
+
+networks:
+  mesa_ayuda_network:
+    driver: bridge
+
+volumes:
+  mongodb_data:
+    driver: local

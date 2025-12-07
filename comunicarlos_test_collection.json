@@ -1,0 +1,538 @@
+{
+	"info": {
+		"_postman_id": "comunicarlos-test-v1",
+		"name": "Comunicarlos API Test Suite",
+		"description": "Colección completa para validar la API del Sistema de Mesa de Ayuda 'Comunicarlos'. Incluye flujos para todos los roles.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "1. Autenticación y Setup",
+			"item": [
+				{
+					"name": "Registro Solicitante",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 201\", function () {",
+									"    pm.response.to.have.status(201);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"nombre\": \"Juan Perez\",\n  \"email\": \"juan.perez@gmail.com\",\n  \"password\": \"SecurePass123!\",\n  \"tipoUsuario\": \"SOLICITANTE\",\n  \"serviciosSuscritos\": [\n    {\n      \"tipo\": \"INTERNET_BANDA_ANCHA\",\n      \"numeroServicio\": \"INT-55501\"\n    }\n  ]\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/auth/registro",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "auth", "registro"]
+						}
+					}
+				},
+				{
+					"name": "Login Solicitante",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"var jsonData = pm.response.json();",
+									"pm.environment.set(\"token_solicitante\", jsonData.token);",
+									"pm.environment.set(\"id_solicitante\", jsonData.usuario.id);",
+									"pm.test(\"Token received\", function () {",
+									"    pm.expect(jsonData.token).to.not.be.undefined;",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"juan.perez@gmail.com\",\n  \"password\": \"SecurePass123!\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/auth/login",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "auth", "login"]
+						}
+					}
+				},
+				{
+					"name": "Registro Operador",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"nombre\": \"Carlos Operador\",\n  \"email\": \"carlos@comunicarlos.com.ar\",\n  \"password\": \"OperadorPass123!\",\n  \"tipoUsuario\": \"OPERADOR\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/auth/registro",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "auth", "registro"]
+						}
+					}
+				},
+				{
+					"name": "Login Operador",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"var jsonData = pm.response.json();",
+									"pm.environment.set(\"token_operador\", jsonData.token);"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"carlos@comunicarlos.com.ar\",\n  \"password\": \"OperadorPass123!\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/auth/login",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "auth", "login"]
+						}
+					}
+				},
+				{
+					"name": "Registro Tecnico",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"nombre\": \"Roberto Tecnico\",\n  \"email\": \"roberto@comunicarlos.com.ar\",\n  \"password\": \"TecnicoPass123!\",\n  \"tipoUsuario\": \"TECNICO\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/auth/registro",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "auth", "registro"]
+						}
+					}
+				},
+				{
+					"name": "Login Tecnico",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"var jsonData = pm.response.json();",
+									"pm.environment.set(\"token_tecnico\", jsonData.token);",
+									"pm.environment.set(\"id_tecnico\", jsonData.usuario.id);"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"roberto@comunicarlos.com.ar\",\n  \"password\": \"TecnicoPass123!\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/auth/login",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "auth", "login"]
+						}
+					}
+				},
+				{
+					"name": "Registro Supervisor",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"nombre\": \"Ana Supervisora\",\n  \"email\": \"ana@comunicarlos.com.ar\",\n  \"password\": \"AdminPass123!\",\n  \"tipoUsuario\": \"SUPERVISOR\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/auth/registro",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "auth", "registro"]
+						}
+					}
+				},
+				{
+					"name": "Login Supervisor",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"var jsonData = pm.response.json();",
+									"pm.environment.set(\"token_supervisor\", jsonData.token);"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"ana@comunicarlos.com.ar\",\n  \"password\": \"AdminPass123!\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/auth/login",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "auth", "login"]
+						}
+					}
+				},
+				{
+					"name": "Configurar Supervision",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer {{token_supervisor}}" },
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"tecnicoId\": {{id_tecnico}}\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/usuarios/supervisores/me/supervisados",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "usuarios", "supervisores", "me", "supervisados"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "2. Flujo Incidente Completo",
+			"item": [
+				{
+					"name": "Crear Incidente (Solicitante)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"var jsonData = pm.response.json();",
+									"pm.environment.set(\"id_incidente\", jsonData.id);",
+									"pm.test(\"Estado es NUEVO\", function () {",
+									"    pm.expect(jsonData.estado).to.eql(\"NUEVO\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer {{token_solicitante}}" },
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"tipo\": \"INCIDENTE\",\n  \"titulo\": \"Internet muy lento\",\n  \"descripcion\": \"La velocidad de descarga es menor a 1MB desde esta mañana.\",\n  \"categoria\": \"SERVICIO_INACCESIBLE\",\n  \"nivelUrgencia\": \"IMPORTANTE\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/requerimientos",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "requerimientos"]
+						}
+					}
+				},
+				{
+					"name": "Listar Tecnicos (Operador)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer {{token_operador}}" }
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/usuarios/tecnicos",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "usuarios", "tecnicos"]
+						}
+					}
+				},
+				{
+					"name": "Asignar Tecnico (Operador)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Estado cambiado a ASIGNADO\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.estado).to.eql(\"ASIGNADO\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer {{token_operador}}" },
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"tecnicoId\": {{id_tecnico}},\n  \"comentario\": \"Asignado a Roberto por disponibilidad.\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/requerimientos/{{id_incidente}}/asignar",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "requerimientos", "{{id_incidente}}", "asignar"]
+						}
+					}
+				},
+				{
+					"name": "Agregar Comentario (Tecnico)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer {{token_tecnico}}" },
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"texto\": \"Revisando la conexión del nodo principal. Parece haber ruido en la línea.\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/requerimientos/{{id_incidente}}/comentarios",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "requerimientos", "{{id_incidente}}", "comentarios"]
+						}
+					}
+				},
+				{
+					"name": "Resolver Incidente (Tecnico)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Estado cambiado a RESUELTO\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.estado).to.eql(\"RESUELTO\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer {{token_tecnico}}" },
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"comentarioResolucion\": \"Se reinició el puerto en la central. El cliente confirma que el servicio funciona correctamente.\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/requerimientos/{{id_incidente}}/resolver",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "requerimientos", "{{id_incidente}}", "resolver"]
+						}
+					}
+				},
+				{
+					"name": "Ver Notificaciones (Supervisor)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer {{token_supervisor}}" }
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/notificaciones?leida=false",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "notificaciones"],
+							"query": [
+								{ "key": "leida", "value": "false" }
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "3. Flujo Solicitud Servicio",
+			"item": [
+				{
+					"name": "Mis Servicios (Solicitante)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer {{token_solicitante}}" }
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/servicios/mis-servicios",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "servicios", "mis-servicios"]
+						}
+					}
+				},
+				{
+					"name": "Solicitar Alta (Solicitante)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer {{token_solicitante}}" },
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"tipoServicio\": \"TELEVISION\",\n  \"planDeseado\": \"Pack HD Premium\",\n  \"direccionInstalacion\": \"Calle Falsa 123\",\n  \"comentarios\": \"Llamar antes de venir\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/servicios/solicitar-alta",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "servicios", "solicitar-alta"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "4. Validaciones y Errores",
+			"item": [
+				{
+					"name": "Acceso Denegado (Solicitante a ruta Operador)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 403\", function () {",
+									"    pm.response.to.have.status(403);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer {{token_solicitante}}" }
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/usuarios/tecnicos",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "usuarios", "tecnicos"]
+						}
+					}
+				},
+				{
+					"name": "Crear Incidente con Datos Inválidos",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 422\", function () {",
+									"    pm.response.to.have.status(422);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer {{token_solicitante}}" },
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"tipo\": \"INCIDENTE\",\n  \"titulo\": \"Corto\",\n  \"descripcion\": \"...\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/requerimientos",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "requerimientos"]
+						}
+					}
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:8080",
+			"type": "string"
+		},
+		{
+			"key": "token_solicitante",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "token_operador",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "token_tecnico",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "token_supervisor",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "id_tecnico",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "id_incidente",
+			"value": "",
+			"type": "string"
+		}
+	]
+}

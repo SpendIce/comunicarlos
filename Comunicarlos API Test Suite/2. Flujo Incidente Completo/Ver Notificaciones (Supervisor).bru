@@ -1,0 +1,23 @@
+meta {
+  name: Ver Notificaciones (Supervisor)
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{base_url}}/api/v1/notificaciones?leida=false
+  body: none
+  auth: inherit
+}
+
+params:query {
+  leida: false
+}
+
+headers {
+  Authorization: Bearer {{token_supervisor}}
+}
+
+settings {
+  encodeUrl: true
+}

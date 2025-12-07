@@ -1,0 +1,40 @@
+meta {
+  name: Registro Solicitante
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{base_url}}/api/v1/auth/registro
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "nombre": "Juan Perez",
+    "email": "juan.perez@gmail.com",
+    "password": "SecurePass123!",
+    "tipoUsuario": "SOLICITANTE",
+    "serviciosSuscritos": [
+      {
+        "tipo": "INTERNET_BANDA_ANCHA",
+        "numeroServicio": "INT-55501"
+      }
+    ]
+  }
+}
+
+script:post-response {
+  test("Status code is 201", function () {
+      expect(res.getStatus()).to.equal(201);
+  });
+}
+
+settings {
+  encodeUrl: true
+}

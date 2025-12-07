@@ -1,0 +1,31 @@
+meta {
+  name: Login Supervisor
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{base_url}}/api/v1/auth/login
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "email": "ana@comunicarlos.com.ar",
+    "password": "AdminPass123!"
+  }
+}
+
+script:post-response {
+  var jsonData = res.getBody();
+  bru.setEnvVar("token_supervisor", jsonData.token);
+}
+
+settings {
+  encodeUrl: true
+}

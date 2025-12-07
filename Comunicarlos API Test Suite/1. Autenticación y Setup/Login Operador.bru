@@ -1,0 +1,31 @@
+meta {
+  name: Login Operador
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{base_url}}/api/v1/auth/login
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "email": "carlos@comunicarlos.com.ar",
+    "password": "OperadorPass123!"
+  }
+}
+
+script:post-response {
+  var jsonData = res.getBody();
+  bru.setEnvVar("token_operador", jsonData.token);
+}
+
+settings {
+  encodeUrl: true
+}

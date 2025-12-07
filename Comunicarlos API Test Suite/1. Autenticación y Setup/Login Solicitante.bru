@@ -1,0 +1,35 @@
+meta {
+  name: Login Solicitante
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{base_url}}/api/v1/auth/login
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "email": "juan.perez@gmail.com",
+    "password": "SecurePass123!"
+  }
+}
+
+script:post-response {
+  var jsonData = res.getBody();
+  bru.setEnvVar("token_solicitante", jsonData.token);
+  bru.setEnvVar("id_solicitante", jsonData.usuario.id);
+  test("Token received", function () {
+      expect(jsonData.token).to.not.be.undefined;
+  });
+}
+
+settings {
+  encodeUrl: true
+}

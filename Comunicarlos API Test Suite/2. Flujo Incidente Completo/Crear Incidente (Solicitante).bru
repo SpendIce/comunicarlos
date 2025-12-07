@@ -1,0 +1,38 @@
+meta {
+  name: Crear Incidente (Solicitante)
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{base_url}}/api/v1/requerimientos
+  body: json
+  auth: inherit
+}
+
+headers {
+  Authorization: Bearer {{token_solicitante}}
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "tipo": "INCIDENTE",
+    "titulo": "Internet muy lento",
+    "descripcion": "La velocidad de descarga es menor a 1MB desde esta mañana.",
+    "categoria": "SERVICIO_INACCESIBLE",
+    "nivelUrgencia": "IMPORTANTE"
+  }
+}
+
+script:post-response {
+  var jsonData = res.getBody();
+  bru.setEnvVar("id_incidente", jsonData.id);
+  test("Estado es NUEVO", function () {
+      expect(jsonData.estado).to.eql("NUEVO");
+  });
+}
+
+settings {
+  encodeUrl: true
+}

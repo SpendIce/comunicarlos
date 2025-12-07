@@ -1,0 +1,25 @@
+meta {
+  name: Acceso Denegado (Solicitante a ruta Operador)
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{base_url}}/api/v1/usuarios/tecnicos
+  body: none
+  auth: inherit
+}
+
+headers {
+  Authorization: Bearer {{token_solicitante}}
+}
+
+script:post-response {
+  test("Status code is 403", function () {
+      expect(res.getStatus()).to.equal(403);
+  });
+}
+
+settings {
+  encodeUrl: true
+}

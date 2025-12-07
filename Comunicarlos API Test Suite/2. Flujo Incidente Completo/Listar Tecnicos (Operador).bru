@@ -1,0 +1,19 @@
+meta {
+  name: Listar Tecnicos (Operador)
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{base_url}}/api/v1/usuarios/tecnicos
+  body: none
+  auth: inherit
+}
+
+headers {
+  Authorization: Bearer {{token_operador}}
+}
+
+settings {
+  encodeUrl: true
+}

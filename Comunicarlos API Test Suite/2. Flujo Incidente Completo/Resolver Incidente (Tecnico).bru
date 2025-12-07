@@ -1,0 +1,33 @@
+meta {
+  name: Resolver Incidente (Tecnico)
+  type: http
+  seq: 5
+}
+
+patch {
+  url: {{base_url}}/api/v1/requerimientos/{{id_incidente}}/resolver
+  body: json
+  auth: inherit
+}
+
+headers {
+  Authorization: Bearer {{token_tecnico}}
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "comentarioResolucion": "Se reinició el puerto en la central. El cliente confirma que el servicio funciona correctamente."
+  }
+}
+
+script:post-response {
+  test("Estado cambiado a RESUELTO", function () {
+      var jsonData = res.getBody();
+      expect(jsonData.estado).to.eql("RESUELTO");
+  });
+}
+
+settings {
+  encodeUrl: true
+}
