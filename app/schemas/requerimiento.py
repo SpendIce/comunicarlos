@@ -172,16 +172,39 @@ class RequerimientoListaResponse(BaseModel):
     tipo: TipoRequerimiento
     titulo: str
     categoria: str
-    nivelUrgencia: Optional[NivelUrgencia]
+    nivelUrgencia: Optional[NivelUrgencia] = None
     estado: EstadoRequerimiento
     prioridad: int
     solicitante: SolicitanteInfo
-    tecnicoAsignado: Optional[TecnicoInfo]
+    tecnicoAsignado: Optional[TecnicoInfo] = None
     fechaCreacion: datetime
     diasDesdeCreacion: int
 
     class Config:
         from_attributes = True
+
+    @model_validator(mode='before')
+    def map_domain_entity(cls, v):
+        """Mapeo para listas (más ligero)"""
+        if hasattr(v, 'get_tipo') and not isinstance(v, dict):
+            nivel_urgencia = None
+            if v.get_tipo() == TipoRequerimiento.INCIDENTE:
+                nivel_urgencia = v.nivel_urgencia
+
+            return {
+                "id": v.id,
+                "tipo": v.get_tipo(),
+                "titulo": v.titulo,
+                "categoria": v.get_categoria(),
+                "nivelUrgencia": nivel_urgencia,
+                "estado": v.estado,
+                "prioridad": v.calcular_prioridad(),
+                "solicitante": v.solicitante,
+                "tecnicoAsignado": v.tecnico_asignado,
+                "fechaCreacion": v.fecha_creacion,
+                "diasDesdeCreacion": v.get_dias_desde_creacion()
+            }
+        return v
 
 T = TypeVar('T')
 

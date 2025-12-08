@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from typing import List
 from datetime import datetime
 from app.schemas.enums import TipoUsuario
@@ -18,6 +18,20 @@ class AutorInfo(BaseModel):
     nombre: str
     tipoUsuario: TipoUsuario
 
+    class Config:
+        from_attributes = True
+
+    @model_validator(mode='before')
+    def map_domain(cls, v):
+        if hasattr(v, 'get_tipo_usuario') and not isinstance(v, dict):
+            return {
+                "id": v.id,
+                "nombre": v.nombre,
+                "tipoUsuario": v.get_tipo_usuario()
+            }
+        return v
+
+
 class ComentarioResponse(BaseModel):
     id: int
     texto: str
@@ -26,6 +40,17 @@ class ComentarioResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+    @model_validator(mode='before')
+    def map_domain(cls, v):
+        if hasattr(v, 'texto') and not isinstance(v, dict):
+            return {
+                "id": v.id,
+                "texto": v.texto,
+                "autor": v.autor,
+                "fechaHora": v.fecha_hora
+            }
+        return v
 
 class ListaComentariosResponse(BaseModel):
     requerimientoId: int
