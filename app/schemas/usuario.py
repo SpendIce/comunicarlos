@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from typing import Optional, List
 from datetime import datetime
 from app.schemas.enums import TipoUsuario, TipoServicio
@@ -25,6 +25,20 @@ class UsuarioPerfilResponse(BaseModel):
     class Config:
         from_attributes = True
 
+        @model_validator(mode='before')
+        def map_domain_data(cls, v):
+            if hasattr(v, 'email') and not isinstance(v, dict):
+                return {
+                    "id": v.id,
+                    "nombre": v.nombre,
+                    "email": str(v.email),
+                    "tipoUsuario": v.get_tipo_usuario(),
+                    "fechaCreacion": v.fecha_creacion,
+                    "ultimoAcceso": v.ultimo_acceso,
+                    "serviciosSuscritos": getattr(v, "servicios_suscritos", None)
+                }
+            return v
+
 class ActualizarPerfilRequest(BaseModel):
     nombre: Optional[str] = Field(None, min_length=3, max_length=100)
     passwordActual: Optional[str] = Field(None, description="Contraseña actual (requerida si se cambia password)")
@@ -50,15 +64,54 @@ class TecnicoResponse(BaseModel):
     class Config:
         from_attributes = True
 
+        @model_validator(mode='before')
+        def map_domain_data(cls, v):
+            if hasattr(v, 'email') and not isinstance(v, dict):
+                return {
+                    "id": v.id,
+                    "nombre": v.nombre,
+                    "email": str(v.email),
+                    "especialidades": v.especialidades,
+                    "requerimientosAsignados": getattr(v, "requerimientos_asignados", 0),
+                    "requerimientosResueltos": 0
+                }
+            return v
+
 class OperadorInfo(BaseModel):
     id: int
     nombre: str
     email: str
 
+    class Config:
+        from_attributes = True
+
+    @model_validator(mode='before')
+    def map_domain(cls, v):
+        if hasattr(v, 'email') and not isinstance(v, dict):
+            return {
+                "id": v.id,
+                "nombre": v.nombre,
+                "email": str(v.email)
+            }
+        return v
+
 class TecnicoInfo(BaseModel):
     id: int
     nombre: str
     email: str
+
+    class Config:
+        from_attributes = True
+
+    @model_validator(mode='before')
+    def map_domain(cls, v):
+        if hasattr(v, 'email') and not isinstance(v, dict):
+            return {
+                "id": v.id,
+                "nombre": v.nombre,
+                "email": str(v.email)
+            }
+        return v
 
 class ConfigurarSupervisionRequest(BaseModel):
     operadorId: Optional[int] = Field(None, description="ID del operador a supervisar")

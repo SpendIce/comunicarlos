@@ -1,9 +1,8 @@
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, validator, model_validator
 from typing import Optional, List, Generic, TypeVar
 from datetime import datetime
 from app.schemas.enums import (
-    TipoRequerimiento, EstadoRequerimiento, NivelUrgencia,
-    CategoriaIncidente, CategoriaSolicitud
+    TipoRequerimiento, EstadoRequerimiento, NivelUrgencia
 )
 
 class CrearRequerimientoRequest(BaseModel):
@@ -38,10 +37,36 @@ class SolicitanteInfo(BaseModel):
     nombre: str
     email: str
 
+    class Config:
+        from_attributes = True
+
+    @model_validator(mode='before')
+    def map_domain(cls, v):
+        if hasattr(v, 'email') and not isinstance(v, dict):
+            return {
+                "id": v.id,
+                "nombre": v.nombre,
+                "email": str(v.email)
+            }
+        return v
+
 class TecnicoInfo(BaseModel):
     id: int
     nombre: str
     email: str
+
+    class Config:
+        from_attributes = True
+
+    @model_validator(mode='before')
+    def map_domain(cls, v):
+        if hasattr(v, 'email') and not isinstance(v, dict):
+            return {
+                "id": v.id,
+                "nombre": v.nombre,
+                "email": str(v.email)
+            }
+        return v
 
 class ComentarioInfo(BaseModel):
     id: int
@@ -49,13 +74,50 @@ class ComentarioInfo(BaseModel):
     autor: dict
     fechaHora: datetime
 
+    class Config:
+        from_attributes = True
+
+    @model_validator(mode='before')
+    def map_domain(cls, v):
+        if hasattr(v, 'texto') and not isinstance(v, dict):
+            return {
+                "id": v.id,
+                "texto": v.texto,
+                "autor": {
+                    "id": v.autor.id,
+                    "nombre": v.autor.nombre,
+                    "email": str(v.autor.email)
+                },
+                "fechaHora": v.fecha_hora
+            }
+        return v
+
 class EventoInfo(BaseModel):
-    id: int
+    id: Optional[int] = None
     tipo: str
     descripcion: str
     responsable: dict
     fechaHora: datetime
     detalles: Optional[dict] = None
+
+    class Config:
+        from_attributes = True
+
+    @model_validator(mode='before')
+    def map_domain(cls, v):
+        if hasattr(v, 'get_tipo_evento') and not isinstance(v, dict):
+            return {
+                "id": v.id,
+                "tipo": v.get_tipo_evento().value,
+                "descripcion": v.descripcion,
+                "responsable": {
+                    "id": v.responsable.id,
+                    "nombre": v.responsable.nombre
+                },
+                "fechaHora": v.fecha_hora,
+                "detalles": None
+            }
+        return v
 
 class RequerimientoResponse(BaseModel):
     id: int
@@ -63,19 +125,47 @@ class RequerimientoResponse(BaseModel):
     titulo: str
     descripcion: str
     categoria: str
-    nivelUrgencia: Optional[NivelUrgencia]
+    nivelUrgencia: Optional[NivelUrgencia] = None
     estado: EstadoRequerimiento
     prioridad: int
     solicitante: SolicitanteInfo
-    tecnicoAsignado: Optional[TecnicoInfo]
+    tecnicoAsignado: Optional[TecnicoInfo] = None
     fechaCreacion: datetime
-    fechaResolucion: Optional[datetime]
+    fechaResolucion: Optional[datetime] = None
     diasDesdeCreacion: int
     comentarios: List[ComentarioInfo] = []
     eventos: List[EventoInfo] = []
 
     class Config:
         from_attributes = True
+
+        @model_validator(mode='before')
+        def map_domain_entity(cls, v):
+            """Mapea Entidad Requerimiento -> Schema"""
+            if hasattr(v, 'titulo') and not isinstance(v, dict):
+                # Determinar si es Incidente para extraer urgencia
+                nivel_urgencia = None
+                if v.get_tipo() == TipoRequerimiento.INCIDENTE:
+                    nivel_urgencia = v.nivel_urgencia
+
+                return {
+                    "id": v.id,
+                    "tipo": v.get_tipo(),
+                    "titulo": v.titulo,
+                    "descripcion": v.descripcion,
+                    "categoria": v.get_categoria(),
+                    "nivelUrgencia": nivel_urgencia,
+                    "estado": v.estado,
+                    "prioridad": v.calcular_prioridad(),
+                    "solicitante": v.solicitante,  # Pydantic usará SolicitanteInfo para validar esto
+                    "tecnicoAsignado": v.tecnico_asignado,  # Puede ser None
+                    "fechaCreacion": v.fecha_creacion,
+                    "fechaResolucion": v.fecha_resolucion,
+                    "diasDesdeCreacion": v.get_dias_desde_creacion(),
+                    "comentarios": v.comentarios,
+                    "eventos": v.eventos
+                }
+            return v
 
 class RequerimientoListaResponse(BaseModel):
     id: int

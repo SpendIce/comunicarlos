@@ -5,7 +5,9 @@ build/
 dist/
 wheels/
 *.egg-info
-
-# Virtual environments
+.idea/
 .venv
 .env
+test_main.http
+comunicarlos_test_collection.json
+.python-version

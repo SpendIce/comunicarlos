@@ -48,9 +48,8 @@ async def require_role(required_roles: list[TipoUsuario]):
     """
     Factory para crear dependencies que verifican roles específicos.
     """
-
     async def role_checker(current_user=Depends(get_current_user)):
-        if current_user.tipoUsuario not in required_roles:
+        if current_user.get_tipo_usuario() not in required_roles:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"No tiene permisos. Se requiere rol: {', '.join([r.value for r in required_roles])}"
@@ -62,7 +61,7 @@ async def require_role(required_roles: list[TipoUsuario]):
 
 # Funciones helper para roles específicos
 async def verificar_rol_solicitante(current_user=Depends(get_current_user)):
-    if current_user.tipoUsuario != TipoUsuario.SOLICITANTE:
+    if current_user.get_tipo_usuario() != TipoUsuario.SOLICITANTE:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Solo solicitantes pueden acceder a este recurso"
@@ -71,7 +70,7 @@ async def verificar_rol_solicitante(current_user=Depends(get_current_user)):
 
 
 async def verificar_rol_operador(current_user=Depends(get_current_user)):
-    if current_user.tipoUsuario != TipoUsuario.OPERADOR:
+    if current_user.get_tipo_usuario() != TipoUsuario.OPERADOR:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Solo operadores pueden acceder a este recurso"
@@ -80,7 +79,7 @@ async def verificar_rol_operador(current_user=Depends(get_current_user)):
 
 
 async def verificar_rol_tecnico(current_user=Depends(get_current_user)):
-    if current_user.tipoUsuario != TipoUsuario.TECNICO:
+    if current_user.get_tipo_usuario() != TipoUsuario.TECNICO:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Solo técnicos pueden acceder a este recurso"
@@ -89,7 +88,7 @@ async def verificar_rol_tecnico(current_user=Depends(get_current_user)):
 
 
 async def verificar_rol_supervisor(current_user=Depends(get_current_user)):
-    if current_user.tipoUsuario != TipoUsuario.SUPERVISOR:
+    if current_user.get_tipo_usuario() != TipoUsuario.SUPERVISOR:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Solo supervisores pueden acceder a este recurso"
@@ -100,7 +99,7 @@ async def verificar_rol_supervisor(current_user=Depends(get_current_user)):
 async def verificar_rol_staff(current_user=Depends(get_current_user)):
     """Verifica que sea operador, técnico o supervisor (personal interno)"""
     roles_permitidos = [TipoUsuario.OPERADOR, TipoUsuario.TECNICO, TipoUsuario.SUPERVISOR]
-    if current_user.tipoUsuario not in roles_permitidos:
+    if current_user.get_tipo_usuario() not in roles_permitidos:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Solo personal interno puede acceder a este recurso"
