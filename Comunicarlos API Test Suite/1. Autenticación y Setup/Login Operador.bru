@@ -16,9 +16,15 @@ headers {
 
 body:json {
   {
-    "email": "carlos@comunicarlos.com.ar",
-    "password": "OperadorPass123!"
+    "email": "{{email_operador}}",
+    "password": "{{password_comun}}"
   }
+}
+
+assert {
+  res.status: eq 200
+  res.body.token: isString
+  res.body.usuario.email: eq {{email_operador}}
 }
 
 script:post-response {

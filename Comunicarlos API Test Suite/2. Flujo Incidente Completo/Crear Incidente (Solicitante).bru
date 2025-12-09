@@ -21,18 +21,28 @@ body:json {
     "titulo": "Internet muy lento",
     "descripcion": "La velocidad de descarga es menor a 1MB desde esta mañana.",
     "categoria": "SERVICIO_INACCESIBLE",
-    "nivelUrgencia": "IMPORTANTE"
+    "nivel_urgencia": "IMPORTANTE"
   }
 }
 
-script:post-response {
-  var jsonData = res.getBody();
-  bru.setEnvVar("id_incidente", jsonData.id);
-  test("Estado es NUEVO", function () {
-      expect(jsonData.estado).to.eql("NUEVO");
-  });
+assert {
+  res.status: eq 201
+  res.body.estado: eq NUEVO
+  res.body.id: isNumber
 }
 
-settings {
-  encodeUrl: true
+tests {
+  test("El incidente debe tener un ID válido", function() {
+    const body = res.getBody();
+    expect(body.id).to.be.a('number');
+    expect(body.id).to. be.above(0);
+  
+    bru.setEnvVar("id_incidente", body.id);
+  });
+  
+  test("La urgencia debe coincidir con el request", function() {
+    const body = res.getBody();
+    // Validamos que respete el snake_case
+    expect(body.nivel_urgencia).to.equal("IMPORTANTE"); 
+  });
 }

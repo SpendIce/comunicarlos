@@ -1,0 +1,26 @@
+meta {
+  name: Dashboard Tecnico
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{base_url}}/api/v1/reportes/dashboard-tecnico
+  body: none
+  auth: inherit
+}
+
+headers {
+  Authorization: Bearer {{token_tecnico}}
+}
+
+tests {
+  test("Datos del técnico son correctos", function() {
+      const body = res.getBody();
+      expect(body.tecnico.email).to.contain("@comunicarlos.com.ar");
+  });
+  
+  test("Debe incluir array de interconsultas", function() {
+      expect(res.getBody().interconsultas).to.be.an('array');
+  });
+}

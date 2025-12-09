@@ -1,76 +1,44 @@
-from typing import List
-from app.domain.entities.usuario import Supervisor
-from app.domain.entities.notificacion import Notificacion
 from app.domain.entities.evento import Evento
+from app.domain.entities.notificacion import Notificacion
+from app.repositories.notificacion_repository import NotificacionRepository
+from app.repositories.usuario_repository import UsuarioRepository
+from app.infrastructure.mongodb.sequence import SequenceGenerator
+
 
 class Notificador:
-    """
-    Servicio de dominio que implementa el patrón Observer.
-    Notifica a supervisores cuando ocurren eventos.
+    def __init__(
+            self,
+            usuario_repo: UsuarioRepository,
+            notificacion_repo: NotificacionRepository,
+            sequence_generator: SequenceGenerator = None
+    ):
+        self.user_repo = usuario_repo
+        self.notif_repo = notificacion_repo
+        self.sequence = sequence_generator if sequence_generator else getattr(notificacion_repo, 'sequence', None)
 
-    Singleton - Solo debe existir una instancia en el sistema.
-    """
-
-    _instance = None
-
-    def __new__(cls):
-        if cls._instance is None:
-            cls._instance = super(Notificador, cls).__new__(cls)
-            cls._instance._supervisores = []
-        return cls._instance
-
-    def __init__(self):
-        pass
-
-    def registrar_supervisor(self, supervisor: Supervisor) -> None:
-        """Registra un supervisor para recibir notificaciones"""
-        if supervisor not in self._supervisores:
-            self._supervisores.append(supervisor)
-
-    def desregistrar_supervisor(self, supervisor: Supervisor) -> None:
-        """Desregistra un supervisor"""
-        if supervisor in self._supervisores:
-            self._supervisores.remove(supervisor)
-
-    def notificar_evento(self, evento: Evento) -> List[Notificacion]:
+    async def notificar_evento(self, evento: Evento):
         """
-        Notifica a los supervisores interesados sobre un evento.
-
-        Un supervisor está interesado si supervisa al responsable del evento.
+        Genera notificaciones para los supervisores del responsable del evento.
         """
-        supervisores_interesados = self._obtener_supervisores_interesados(evento)
-        notificaciones_generadas = []
+        actor = evento.responsable
 
-        for supervisor in supervisores_interesados:
+        supervisores = await self.user_repo.buscar_supervisores_de_empleado(actor.id)
+
+        if not supervisores:
+            return
+
+        for supervisor in supervisores:
+            if self.sequence:
+                notif_id = await self.sequence.get_next("notificacion_id")
+            else:
+                import time
+                notif_id = int(time.time() * 1000)
+
             notificacion = Notificacion(
-                id=None,
+                id=notif_id,
                 evento=evento,
                 supervisor=supervisor
             )
-            supervisor.recibir_notificacion(notificacion)
-            notificaciones_generadas.append(notificacion)
 
-        return notificaciones_generadas
-
-    def _obtener_supervisores_interesados(self, evento: Evento) -> List[Supervisor]:
-        """
-        Determina qué supervisores deben ser notificados.
-
-        Un supervisor es notificado si supervisa al responsable del evento.
-        """
-        supervisores_interesados = []
-        responsable = evento.responsable
-
-        for supervisor in self._supervisores:
-            if supervisor.supervisa_empleado(responsable):
-                supervisores_interesados.append(supervisor)
-
-        return supervisores_interesados
-
-    def get_supervisores_registrados(self) -> List[Supervisor]:
-        """Retorna la lista de supervisores registrados"""
-        return self._supervisores.copy()
-
-    def limpiar(self) -> None:
-        """Limpia todos los supervisores registrados (útil para testing)"""
-        self._supervisores.clear()
+            # 3. Persistir
+            await self.notif_repo.guardar(notificacion)

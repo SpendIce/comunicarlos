@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query, Path, status
+from fastapi import APIRouter, Depends, Query, Path, status, HTTPException
 from typing import Optional
 from app.schemas.requerimiento import (
     CrearRequerimientoRequest,
@@ -8,7 +8,7 @@ from app.schemas.requerimiento import (
     ReabrirRequerimientoRequest,
     PaginatedResponse
 )
-from app.schemas.enums import EstadoRequerimiento, TipoRequerimiento, NivelUrgencia
+from app.schemas.enums import EstadoRequerimiento, TipoRequerimiento
 from app.dependencies.auth import (
     get_current_user,
     verificar_rol_solicitante,
@@ -16,9 +16,9 @@ from app.dependencies.auth import (
 )
 from app.services.requerimiento_service import RequerimientoService
 from app.dependencies.services import get_req_service
+
+
 router = APIRouter()
-
-
 
 @router.post("", response_model=RequerimientoResponse, status_code=status.HTTP_201_CREATED)
 async def crear_requerimiento(
@@ -26,18 +26,22 @@ async def crear_requerimiento(
         current_user=Depends(verificar_rol_solicitante),
         service: RequerimientoService = Depends(get_req_service)
 ):
+
     return await service.crear_requerimiento(
         solicitante_id=current_user.id,
         tipo=request.tipo,
         titulo=request.titulo,
         descripcion=request.descripcion,
         categoria=request.categoria,
-        nivel_urgencia=request.nivelUrgencia
+        nivel_urgencia=request.nivel_urgencia
     )
-
 
 @router.get("", response_model=PaginatedResponse[RequerimientoListaResponse])
 async def listar_requerimientos(
+        estado: Optional[EstadoRequerimiento] = Query(None),
+        tipo: Optional[TipoRequerimiento] = Query(None),
+        page: int = Query(0, ge=0),
+        size: int = Query(20, ge=1, le=100),
         current_user=Depends(get_current_user),
         service: RequerimientoService = Depends(get_req_service)
 ):
@@ -54,10 +58,10 @@ async def listar_requerimientos(
         "content": requerimientos,
         "page": page,
         "size": size,
-        "totalElements": total,
-        "totalPages": total_pages,
-        "isFirst": page == 0,
-        "isLast": page >= total_pages - 1
+        "total_elements": total,
+        "total_pages": total_pages,
+        "is_first": page == 0,
+        "is_last": page >= total_pages - 1
     }
 
 
@@ -94,36 +98,15 @@ async def resolver_requerimiento(
 async def reabrir_requerimiento(
     id: int = Path(..., description="ID del requerimiento"),
     request: ReabrirRequerimientoRequest = None,
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user),
+    service: RequerimientoService = Depends(get_req_service)
 ):
-    """
-    Reabrir un requerimiento previamente resuelto.
+    # Validar que venga el motivo
+    if not request or not request.motivo:
+         raise HTTPException(status_code=400, detail="El motivo es requerido para reabrir")
 
-    **Para OPERADORES y TECNICOS**
-
-    Útil cuando:
-    - El problema persiste
-    - El cliente reporta que la solución no funcionó
-    - Se detectó que se cerró prematuramente
-
-    ## Validaciones:
-    - El requerimiento debe estar RESUELTO
-    - Se requiere un motivo de reapertura
-
-    ## Efectos:
-    - Cambia estado a REABIERTO
-    - Se puede reasignar a otro técnico si es necesario
-    - Genera evento de reapertura
-    """
-    # TODO: Implementar
-    pass
-
-
-async def verificar_rol_solicitante():
-    # TODO: Implementar
-    pass
-
-
-async def verificar_rol_tecnico():
-    # TODO: Implementar
-    pass
+    return await service.reabrir_requerimiento(
+        requerimiento_id=id,
+        usuario_id=current_user.id,
+        motivo=request.motivo
+    )

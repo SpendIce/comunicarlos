@@ -21,6 +21,32 @@ body:json {
   }
 }
 
+assert {
+  res.status: eq 201
+}
+
+tests {
+  test("El comentario debe tener ID y Fecha", function() {
+    const body = res.getBody();
+    expect(body.id).to.be.a('number');
+    expect(body.fechaHora).to.be.a('string');
+  });
+  
+  test("El texto debe coincidir con el enviado", function() {
+    const body = res.getBody();
+    const reqBody = req.getBody(); 
+    expect(body.texto).to.equal(reqBody.texto);
+  });
+  
+  test("El autor debe ser el técnico actual", function() {
+    const body = res.getBody();
+    const emailTecnico = bru.getEnvVar("email_tecnico");
+    
+    expect(body.autor.email).to.equal(emailTecnico);
+    expect(body.autor.tipoUsuario).to.equal("TECNICO");
+  });
+}
+
 settings {
   encodeUrl: true
 }

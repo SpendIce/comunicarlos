@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import APIRouter, Depends, Query, HTTPException, status
 from typing import List
 from app.schemas.usuario import (
     UsuarioPerfilResponse, ActualizarPerfilRequest,
@@ -22,7 +22,7 @@ async def obtener_perfil_actual(current_user=Depends(get_current_user)):
 async def actualizar_perfil(
         request: ActualizarPerfilRequest,
         current_user=Depends(get_current_user),
-        user_repo=Depends(get_usuario_repo),  # Acceso directo al repo para update simple
+        user_repo=Depends(get_usuario_repo),
         auth_service: AutenticacionService = Depends(get_auth_service)
 ):
     # Validar password actual si se quiere cambiar
@@ -47,7 +47,6 @@ async def listar_tecnicos(
         user_repo=Depends(get_usuario_repo)
 ):
     tecnicos = await user_repo.buscar_tecnicos(especialidad=especialidad)
-    # Aquí podríamos enriquecer con métricas si fuera necesario llamando al servicio de reportes
     return tecnicos
 
 
@@ -57,29 +56,17 @@ async def configurar_supervision(
         current_user=Depends(verificar_rol_supervisor),
         user_repo=Depends(get_usuario_repo)
 ):
-    if request.operadorId:
-        op = await user_repo.buscar_por_id(request.operadorId)
+    if request.operador_id:
+        op = await user_repo.buscar_por_id(request.operador_id)
         if op: current_user.agregar_operador_supervisado(op)
 
-    if request.tecnicoId:
-        tec = await user_repo.buscar_por_id(request.tecnicoId)
+    if request.tecnico_id:
+        tec = await user_repo.buscar_por_id(request.tecnico_id)
         if tec: current_user.agregar_tecnico_supervisado(tec)
 
     await user_repo.guardar(current_user)
 
-    # Recargar para asegurar integridad en la respuesta
     return {
-        "operadoresSupervisados": current_user.operadores_supervisados,
-        "tecnicosSupervisados": current_user.tecnicos_supervisados
+        "operadores_supervisados": current_user.operadores_supervisados,
+        "tecnicos_supervisados": current_user.tecnicos_supervisados
     }
-
-
-# Dependency para verificar roles (ejemplo)
-async def verificar_rol_operador():
-    # TODO: Implementar verificación de rol
-    pass
-
-
-async def verificar_rol_supervisor():
-    # TODO: Implementar verificación de rol
-    pass

@@ -17,18 +17,24 @@ headers {
 
 body:json {
   {
-    "tecnicoId": {{id_tecnico}},
+    "tecnico_id": {{id_tecnico}},
     "comentario": "Asignado a Roberto por disponibilidad."
   }
 }
 
-script:post-response {
-  test("Estado cambiado a ASIGNADO", function () {
-      var jsonData = res.getBody();
-      expect(jsonData.estado).to.eql("ASIGNADO");
+tests {
+  test("El status code debe ser 200 OK", function() {
+    expect(res.getStatus()).to.equal(200);
   });
-}
-
-settings {
-  encodeUrl: true
+  
+  test("El estado del requerimiento cambia a ASIGNADO", function() {
+    const body = res.getBody();
+    expect(body.estado).to.equal("ASIGNADO");
+  });
+  
+  test("El técnico asignado debe ser el correcto", function() {
+    const body = res.getBody();
+    const idTecnicoEsperado = bru.getEnvVar("id_tecnico");
+    expect(body.tecnico_asignado.id).to.equal(parseInt(idTecnicoEsperado));
+  });
 }

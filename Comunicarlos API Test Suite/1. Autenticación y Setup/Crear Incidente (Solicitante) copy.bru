@@ -1,0 +1,30 @@
+meta {
+  name: Crear Incidente (Solicitante) copy
+  type: http
+  seq: 12
+}
+
+post {
+  url: {{base_url}}/api/v1/requerimientos
+  body: json
+  auth: inherit
+}
+
+headers {
+  Authorization: Bearer {{token_solicitante}}
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "tipo": "INCIDENTE",
+    "titulo": "Internet muy lento",
+    "descripcion": "La velocidad de descarga es menor a 1MB desde esta mañana.",
+    "categoria": "SERVICIO_INACCESIBLE",
+    "nivel_urgencia": "IMPORTANTE"
+  }
+}
+
+assert {
+  res.status: eq 403
+}

@@ -1,8 +1,7 @@
 from typing import List, Optional, Dict, Any
 from motor.motor_asyncio import AsyncIOMotorDatabase
-from app.domain import Requerimiento, Incidente, Solicitud, Comentario
-from app.domain.enums import TipoRequerimiento, EstadoRequerimiento, NivelUrgencia, CategoriaIncidente, \
-    CategoriaSolicitud
+from app.domain.entities.requerimiento import Requerimiento, Incidente, Solicitud
+from app.domain.enums import TipoRequerimiento, EstadoRequerimiento, NivelUrgencia, CategoriaIncidente, CategoriaSolicitud
 from app.infrastructure.mongodb.sequence import SequenceGenerator
 
 
@@ -24,7 +23,9 @@ class RequerimientoRepository:
         doc = await self.collection.find_one({"_id": id})
         return await self._to_entity(doc) if doc else None
 
-    # --- Consultas Optimizadas para Listados ---
+    async def siguiente_id_comentario(self) -> int:
+        """Genera el siguiente ID único para un comentario"""
+        return await self.sequence.get_next("comentario_id")
 
     async def buscar_con_filtros(self, filtros: dict, page: int, size: int) -> tuple[List[Requerimiento], int]:
         """Método genérico para listar con paginación"""

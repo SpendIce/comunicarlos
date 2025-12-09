@@ -18,6 +18,42 @@ headers {
   Authorization: Bearer {{token_supervisor}}
 }
 
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("Estructura de respuesta paginada correcta", function() {
+    const body = res.getBody();
+    expect(body).to.have.property('content');
+    expect(body).to.have.property('totalElements');
+    expect(body).to.have.property('totalNoLeidas');
+    
+    expect(body.content).to.be.an('array');
+  });
+  
+  test("Debe haber notificaciones recientes", function() {
+    const body = res.getBody();
+    
+    // Como venimos de crear/modificar incidentes, debería haber al menos una notificación
+    expect(body.content.length).to.be.greaterThan(0);
+    
+    // Verificamos la estructura de una notificación
+    const notificacion = body.content[0];
+    expect(notificacion).to.have.property('leida');
+    expect(notificacion.evento).to.have.property('descripcion');
+  });
+  
+  test("Contador de no leídas debe ser consistente", function() {
+      const body = res.getBody();
+      // Filtramos las que vienen en 'leida': false
+      const noLeidasEnPagina = body.content.filter(n => n.leida === false).length;
+      
+      // El total global debe ser al menos igual a las que vemos en esta página
+      expect(body.totalNoLeidas).to.be.at.least(noLeidasEnPagina);
+  });
+}
+
 settings {
   encodeUrl: true
 }

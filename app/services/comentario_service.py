@@ -1,5 +1,5 @@
 from typing import List
-from app.domain import Comentario, Usuario, Requerimiento, EventoFactory, Notificador
+from app.domain import Comentario, Usuario, EventoFactory
 from app.domain.enums import TipoEvento
 from app.services.exceptions import NotFoundException, UnauthorizedException
 
@@ -13,7 +13,8 @@ class ComentarioService:
     def __init__(
             self,
             requerimiento_repository,
-            usuario_repository
+            usuario_repository,
+            notificador
     ):
         """
         Args:
@@ -22,7 +23,7 @@ class ComentarioService:
         """
         self.req_repo = requerimiento_repository
         self.usuario_repo = usuario_repository
-        self.notificador = Notificador()
+        self.notificador = notificador
 
     async def agregar_comentario(
             self,
@@ -64,14 +65,15 @@ class ComentarioService:
             )
 
         # Crear comentario
+        nuevo_id = await self.req_repo.siguiente_id_comentario()
         comentario = Comentario(
-            id=None,
+            id=nuevo_id,
             texto=texto,
             autor=usuario,
             requerimiento=requerimiento
         )
 
-        # Agregar al requerimiento (validaciones en el dominio)
+        # Agregar al requerimiento
         requerimiento.agregar_comentario(comentario)
 
         # Crear evento de comentario
@@ -87,7 +89,7 @@ class ComentarioService:
         await self.req_repo.guardar(requerimiento)
 
         # Notificar
-        self.notificador.notificar_evento(evento)
+        await self.notificador.notificar_evento(evento)
 
         return comentario
 

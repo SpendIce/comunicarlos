@@ -14,6 +14,27 @@ headers {
   Authorization: Bearer {{token_operador}}
 }
 
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("La respuesta debe ser una lista de técnicos", function() {
+    const body = res.getBody();
+    expect(body).to.be.an('array');
+    expect(body.length).to.be.greaterThan(0);
+  });
+  
+  test("Cada técnico debe tener email corporativo", function() {
+    const body = res.getBody();
+    const primerTecnico = body[0];
+    if(primerTecnico) {
+        expect(primerTecnico.email).to.include("@comunicarlos.com.ar");
+        bru.setEnvVar("id_tecnico", primerTecnico.id);
+    }
+  });
+}
+
 settings {
   encodeUrl: true
 }

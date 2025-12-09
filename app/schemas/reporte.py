@@ -6,7 +6,6 @@ class ResumenOperador(BaseModel):
     requerimientosNuevos: int
     requerimientosSinAsignar: int
     incidentesCriticos: int
-    promedioTiempoAsignacion: str
 
 class DistribucionEstado(BaseModel):
     NUEVO: int = 0

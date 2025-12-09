@@ -17,13 +17,20 @@ headers {
 
 body:json {
   {
-    "tipoServicio": "TELEVISION",
-    "planDeseado": "Pack HD Premium",
-    "direccionInstalacion": "Calle Falsa 123",
+    "tipo_servicio": "TELEVISION",
+    "plan_deseado": "Pack HD Premium",
+    "direccion_instalacion": "Calle Falsa 123",
     "comentarios": "Llamar antes de venir"
   }
 }
 
-settings {
-  encodeUrl: true
+assert {
+  res.status: eq 201
+}
+
+tests {
+  test("Solicitud de alta creada correctamente", function () {
+        var jsonData = res.getBody();
+        expect(jsonData.mensaje).to.eql("Solicitud de alta creada correctamente");
+    });
 }

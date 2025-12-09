@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Path, Depends, status
+from fastapi import APIRouter, Path, Depends, status, HTTPException
 from app.schemas.servicio import (
     MisServiciosResponse, SolicitarAltaRequest, SolicitarBajaRequest, SolicitudServicioResponse
 )
 from app.dependencies.auth import verificar_rol_solicitante, get_current_user
 from app.services.servicio_service import ServicioService
 from app.dependencies.services import get_servicio_service
+from app.services.exceptions import NotFoundException
 
 router = APIRouter()
 
@@ -24,9 +25,9 @@ async def solicitar_alta_servicio(
 ):
     solicitud = await service.solicitar_alta_servicio(
         solicitante_id=current_user.id,
-        tipo_servicio=request.tipoServicio,
-        plan_deseado=request.planDeseado,
-        direccion_instalacion=request.direccionInstalacion,
+        tipo_servicio=request.tipo_servicio,
+        plan_deseado=request.plan_deseado,
+        direccion_instalacion=request.direccion_instalacion,
         comentarios=request.comentarios
     )
     return {
@@ -48,7 +49,7 @@ async def solicitar_baja_servicio(
         servicio_id=servicio_id,
         solicitante_id=current_user.id,
         motivo=request.motivo,
-        fecha_deseada_baja=str(request.fechaDeseadaBaja),
+        fecha_deseada_baja=str(request.fecha_deseada_baja),
         comentarios=request.comentarios
     )
     return {

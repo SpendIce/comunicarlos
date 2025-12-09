@@ -13,7 +13,8 @@ class AsignacionService:
     def __init__(
             self,
             requerimiento_repository,
-            usuario_repository
+            usuario_repository,
+            notificador
     ):
         """
         Args:
@@ -22,7 +23,7 @@ class AsignacionService:
         """
         self.req_repo = requerimiento_repository
         self.usuario_repo = usuario_repository
-        self.notificador = Notificador()
+        self.notificador = notificador
 
     async def asignar_tecnico(
             self,
@@ -92,7 +93,7 @@ class AsignacionService:
         requerimiento_actualizado = await self.req_repo.guardar(requerimiento)
 
         # Notificar
-        self.notificador.notificar_evento(evento)
+        await self.notificador.notificar_evento(evento)
 
         return requerimiento_actualizado
 

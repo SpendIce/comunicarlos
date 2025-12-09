@@ -1,5 +1,5 @@
-from pydantic import BaseModel, model_validator
-from typing import List, Optional
+from pydantic import BaseModel, model_validator, Field
+from typing import List, Optional, Any
 from datetime import datetime
 from app.schemas.enums import TipoEvento
 
@@ -12,18 +12,21 @@ class RequerimientoNotifInfo(BaseModel):
         from_attributes = True
 
     @model_validator(mode='before')
-    def map_domain(cls, v):
+    @classmethod
+    def map_domain(cls, v: Any) -> Any:
         if hasattr(v, 'titulo') and not isinstance(v, dict):
             urgencia = None
-            if hasattr(v, 'nivel_urgencia'):
-                urgencia = v.nivel_urgencia.value
+            if hasattr(v, 'nivel_urgencia') and v.nivel_urgencia is not None:
+                try:
+                    urgencia = v.nivel_urgencia.value
+                except AttributeError:
+                    urgencia = str(v.nivel_urgencia)
             return {
                 "id": v.id,
                 "titulo": v.titulo,
                 "urgencia": urgencia
             }
         return v
-
 
 class ResponsableInfo(BaseModel):
     id: int
@@ -43,7 +46,8 @@ class EventoNotifInfo(BaseModel):
         from_attributes = True
 
     @model_validator(mode='before')
-    def map_domain(cls, v):
+    @classmethod
+    def map_domain(cls, v: Any) -> Any:
         if hasattr(v, 'get_tipo_evento') and not isinstance(v, dict):
             return {
                 "tipo": v.get_tipo_evento(),
@@ -62,6 +66,22 @@ class NotificacionResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+    @model_validator(mode='before')
+    @classmethod
+    def map_domain(cls, v: Any) -> Any:
+        if not isinstance(v, dict):
+            fecha = getattr(v, 'fecha_hora_generada', None)
+            if not fecha:
+                fecha = getattr(v, 'fecha_creacion', datetime.now())
+            return {
+                "id": v.id,
+                "leida": v.leida,
+                "fechaHoraGenerada": fecha,
+                "fechaLectura": getattr(v, 'fecha_lectura', None),
+                "evento": v.evento
+            }
+        return v
 
 class PaginatedNotificacionesResponse(BaseModel):
     content: List[NotificacionResponse]

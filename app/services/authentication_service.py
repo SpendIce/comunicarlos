@@ -8,6 +8,9 @@ from app.domain import (
 from app.domain.enums import TipoUsuario, TipoServicio
 from app.services.exceptions import UnauthorizedException, NotFoundException, ConflictException
 from app.config import settings
+from app.repositories.token_repository import TokenRepository
+from app.repositories.usuario_repository import UsuarioRepository
+from app.repositories.servicio_repository import ServicioRepository
 
 # Configuración de encriptación de passwords
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -18,15 +21,18 @@ class AutenticacionService:
     Servicio de autenticación y gestión de usuarios.
     Maneja registro, login, validación de tokens JWT.
     """
-
-    def __init__(self, usuario_repository, servicio_repository):
+    def __init__(self, usuario_repository: UsuarioRepository,
+                 servicio_repository: ServicioRepository,
+                 token_repository: TokenRepository):
         """
         Args:
             usuario_repository: Repositorio de usuarios
             servicio_repository: Repositorio de servicios
+            token_repository: Repositorio de tokens
         """
         self.usuario_repo = usuario_repository
         self.servicio_repo = servicio_repository
+        self.token_repo = token_repository
 
     # ========================================================================
     # Gestión de Passwords
@@ -88,7 +94,7 @@ class AutenticacionService:
 
         return token
 
-    def validar_token(self, token: str) -> dict:
+    async def validar_token(self, token: str) -> dict:
         """
         Valida y decodifica un token JWT.
 
@@ -107,11 +113,14 @@ class AutenticacionService:
                 settings.SECRET_KEY,
                 algorithms=[settings.ALGORITHM]
             )
-            return payload
         except JWTError as e:
             raise UnauthorizedException(f"Token inválido: {str(e)}")
+        if await self.token_repo.esta_revocado(token):
+            raise UnauthorizedException("El token ha sido invalidado (logout)")
 
-    def obtener_usuario_desde_token(self, token: str) -> Usuario:
+        return payload
+
+    async def obtener_usuario_desde_token(self, token: str) -> Usuario:
         """
         Obtiene el usuario asociado a un token JWT.
 
@@ -125,15 +134,29 @@ class AutenticacionService:
             UnauthorizedException: Si el token es inválido
             NotFoundException: Si el usuario no existe
         """
-        payload = self.validar_token(token)
+        payload = await self.validar_token(token)
         user_id = int(payload.get("sub"))
 
-        usuario = self.usuario_repo.buscar_por_id(user_id)
+        usuario = await self.usuario_repo.buscar_por_id(user_id)
         if not usuario:
             raise NotFoundException(f"Usuario con ID {user_id} no encontrado")
 
         return usuario
 
+    async def revocar_token(self, token: str):
+        """Invalida un token agregándolo a la blocklist"""
+        try:
+            # Decodificamos sin verificar firma solo para sacar la fecha 'exp'
+            # Si el token ya expiró, no hace falta revocarlo, pero lo manejamos igual
+            payload = jwt.get_unverified_claims(token)
+            timestamp_exp = payload.get("exp")
+
+            if timestamp_exp:
+                fecha_expiracion = datetime.utcfromtimestamp(timestamp_exp)
+                await self.token_repo.revocar(token, fecha_expiracion)
+
+        except JWTError:
+            pass  # Si el token es invalido, ignoramos el logout
     # ========================================================================
     # Registro y Login
     # ========================================================================
@@ -189,7 +212,7 @@ class AutenticacionService:
                 servicio = Servicio(
                     id=None,
                     tipo=TipoServicio[servicio_data["tipo"]],
-                    numero_servicio=servicio_data["numeroServicio"],
+                    numero_servicio=servicio_data["numero_servicio"],
                     solicitante=usuario,
                     activo=True
                 )
@@ -225,6 +248,11 @@ class AutenticacionService:
 
         # Guardar en repositorio
         usuario_guardado = await self.usuario_repo.guardar(usuario)
+        if tipo_usuario == TipoUsuario.SOLICITANTE and servicios_suscritos:
+            for servicio in usuario.servicios_suscritos:
+                servicio.solicitante = usuario_guardado
+                await self.servicio_repo.guardar(servicio)
+
         return usuario_guardado
 
     async def autenticar(self, email: str, password: str) -> tuple[Usuario, str]:

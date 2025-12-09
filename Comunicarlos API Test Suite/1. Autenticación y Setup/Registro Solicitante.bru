@@ -17,24 +17,18 @@ headers {
 body:json {
   {
     "nombre": "Juan Perez",
-    "email": "juan.perez@gmail.com",
-    "password": "SecurePass123!",
-    "tipoUsuario": "SOLICITANTE",
-    "serviciosSuscritos": [
+    "email": "{{email_solicitante}}",
+    "password": "{{password_comun}}",
+    "tipo_usuario": "SOLICITANTE",
+    "servicios_suscritos": [
       {
         "tipo": "INTERNET_BANDA_ANCHA",
-        "numeroServicio": "INT-55501"
+        "numero_servicio": "INT-55501"
       }
     ]
   }
 }
 
-script:post-response {
-  test("Status code is 201", function () {
-      expect(res.getStatus()).to.equal(201);
-  });
-}
-
-settings {
-  encodeUrl: true
+assert {
+  res.status: eq 201
 }

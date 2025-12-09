@@ -1,0 +1,36 @@
+meta {
+  name: Reabrir Incidente (Solicitante)
+  type: http
+  seq: 7
+}
+
+patch {
+  url: {{base_url}}/api/v1/requerimientos/{{id_incidente}}/reabrir
+  body: json
+  auth: bearer
+}
+
+headers {
+  Content-Type: application/json
+}
+
+auth:bearer {
+  token: {{token_solicitante}}
+}
+
+body:json {
+  {
+      "motivo": "{{motivo_reapertura}}"
+    }
+}
+
+tests {
+  test("Estado vuelve a estar ABIERTO/ASIGNADO", function () {
+        var jsonData = res.getBody();
+        expect(jsonData.estado).to.not.eql("RESUELTO");
+    });
+}
+
+settings {
+  encodeUrl: true
+}

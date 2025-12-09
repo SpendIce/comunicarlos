@@ -4,6 +4,7 @@ from typing import Annotated
 from app.schemas.auth import LoginRequest, LoginResponse, RegistroRequest, UsuarioResponse, RefreshTokenResponse
 from app.services.authentication_service import AutenticacionService
 from app.dependencies.services import get_auth_service
+from app.services.exceptions import UnauthorizedException
 
 router = APIRouter()
 security = HTTPBearer()
@@ -14,24 +15,17 @@ async def registro(
         request: RegistroRequest,
         service: AutenticacionService = Depends(get_auth_service)
 ):
-    try:
-        servicios = [s.model_dump() for s in request.serviciosSuscritos] if request.serviciosSuscritos else None
+    servicios = [s.model_dump() for s in request.servicios_suscritos] if request.servicios_suscritos else None
 
-        nuevo_usuario = await service.registrar_usuario(
-            # Nota: Asegurate que el servicio sea async o usa run_in_threadpool
-            nombre=request.nombre,
-            email=request.email,
-            password=request.password,
-            tipo_usuario=request.tipoUsuario,
-            servicios_suscritos=servicios
-        )
-        return nuevo_usuario
-    except Exception as e:
-        print(f"Error en registro: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error interno al registrar usuario: {str(e)}"
-        )
+    nuevo_usuario = await service.registrar_usuario(
+        nombre=request.nombre,
+        email=request.email,
+        password=request.password,
+        tipo_usuario=request.tipo_usuario,
+        servicios_suscritos=servicios
+    )
+    return nuevo_usuario
+
 
 
 @router.post("/login", response_model=LoginResponse)
@@ -46,24 +40,22 @@ async def login(
     )
 
 
-# ... logout y refresh (opcionales por ahora) ...
-
-
 @router.post(
     "/logout",
-    status_code=status.HTTP_204_NO_CONTENT,
-    summary="Cerrar sesión",
-    description="Invalida el token JWT actual"
+    status_code=status.HTTP_200_OK,
+    summary="Cerrar sesión"
 )
-async def logout(credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)]):
+async def logout(
+        credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)],
+        service: AutenticacionService = Depends(get_auth_service)
+):
     """
-    Cerrar sesión del usuario actual.
-
-    Invalida el token JWT para que no pueda ser usado nuevamente.
+    Cerrar sesión. Invalida el token actual agregándolo a una lista de bloqueo.
     """
-    # TODO: Implementar lógica de logout
-    pass
+    token = credentials.credentials
+    await service.revocar_token(token)
 
+    return {"message": "Sesión cerrada exitosamente"}
 
 @router.post(
     "/refresh",
@@ -71,12 +63,20 @@ async def logout(credentials: Annotated[HTTPAuthorizationCredentials, Depends(se
     summary="Renovar token",
     description="Obtener un nuevo token JWT sin necesidad de login"
 )
-async def refresh_token(credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)]):
+async def refresh_token(credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)],
+                        service: AutenticacionService = Depends(get_auth_service)):
     """
-    Renovar token JWT.
+    Genera un nuevo token JWT para un usuario ya autenticado.
+    """
+    token_actual = credentials.credentials
+    # Obtenemos el usuario del token actual (valida que no haya expirado aún)
+    usuario = await service.obtener_usuario_desde_token(token_actual)
 
-    Útil para mantener la sesión activa sin requerir que el usuario
-    ingrese sus credenciales nuevamente.
-    """
-    # TODO: Implementar lógica de refresh token
-    pass
+    # Generamos uno nuevo
+    nuevo_token = service.crear_token_acceso(usuario)
+
+    return {
+        "token": nuevo_token,
+        "tipo": "Bearer",
+        "expires_in": 86400  # O el valor configurado en settings
+    }

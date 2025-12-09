@@ -21,7 +21,7 @@ async def asignar_tecnico(
 ):
     return await service.asignar_tecnico(
         requerimiento_id=id,
-        tecnico_id=request.tecnicoId,
+        tecnico_id=request.tecnico_id,
         operador_id=current_user.id,
         comentario=request.comentario
     )
@@ -35,7 +35,7 @@ async def reasignar_tecnico(
 ):
     return await service.reasignar_tecnico(
         requerimiento_id=id,
-        nuevo_tecnico_id=request.tecnicoId,
+        nuevo_tecnico_id=request.tecnico_id,
         operador_id=current_user.id,
         motivo=request.motivo
     )
@@ -50,6 +50,6 @@ async def derivar_tecnico(
     return await service.derivar_tecnico(
         requerimiento_id=id,
         tecnico_origen_id=current_user.id,
-        tecnico_destino_id=request.tecnicoDestinoId,
+        tecnico_destino_id=request.tecnico_destino_id,
         motivo=request.motivo
     )

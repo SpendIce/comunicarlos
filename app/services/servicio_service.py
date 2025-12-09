@@ -14,7 +14,8 @@ class ServicioService:
             self,
             servicio_repository,
             usuario_repository,
-            requerimiento_repository
+            requerimiento_repository,
+            notificador
     ):
         """
         Args:
@@ -25,6 +26,7 @@ class ServicioService:
         self.servicio_repo = servicio_repository
         self.usuario_repo = usuario_repository
         self.req_repo = requerimiento_repository
+        self.notificador = notificador
 
     async def listar_servicios_solicitante(
             self,
@@ -109,8 +111,7 @@ class ServicioService:
         solicitud_guardada = await self.req_repo.guardar(solicitud)
 
         # Notificar
-        notificador = Notificador()
-        notificador.notificar_evento(evento)
+        await self.notificador.notificar_evento(evento)
 
         return solicitud_guardada
 
@@ -181,7 +182,6 @@ class ServicioService:
         solicitud_guardada = await self.req_repo.guardar(solicitud)
 
         # Notificar
-        notificador = Notificador()
-        notificador.notificar_evento(evento)
+        await self.notificador.notificar_evento(evento)
 
         return solicitud_guardada

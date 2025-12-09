@@ -1,0 +1,35 @@
+meta {
+  name: Solicitar Baja (Solicitante)
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{base_url}}/api/v1/servicios/{{servicio_id}}/solicitar-baja
+  body: json
+  auth: inherit
+}
+
+headers {
+  Authorization: Bearer {{token_solicitante}}
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "motivo": "Me mudo de ciudad",
+    "fecha_deseada_baja": "2025-12-01",
+    "comentarios": "Contactar por la tarde"
+  }
+}
+
+assert {
+  res.status: eq 201
+}
+
+tests {
+  test("Solicitud de baja creada correctamente", function () {
+        var jsonData = res.getBody();
+        expect(jsonData.mensaje).to.eql("Solicitud de baja creada correctamente");
+    });
+}

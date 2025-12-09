@@ -14,6 +14,29 @@ headers {
   Authorization: Bearer {{token_solicitante}}
 }
 
+assert {
+  res.status: eq 200
+  res.body.servicios: isArray
+}
+
+tests {
+  test("Debe retornar lista de servicios", function() {
+    const body = res.getBody();
+    expect(body).to.have.property('servicios');
+    expect(body.servicios).to.be.an('array');
+  });
+  
+  test("Debe tener al menos un servicio activo", function() {
+    const body = res.getBody();
+    expect(body.servicios.length).to.be.greaterThan(0);
+    
+    const primerServicio = body.servicios[0];
+    expect(primerServicio.activo).to.be.true;
+    
+    bru.setEnvVar("servicio_id", primerServicio.id);
+  });
+}
+
 settings {
   encodeUrl: true
 }

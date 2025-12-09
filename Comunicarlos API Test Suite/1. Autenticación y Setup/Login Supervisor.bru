@@ -16,9 +16,15 @@ headers {
 
 body:json {
   {
-    "email": "ana@comunicarlos.com.ar",
-    "password": "AdminPass123!"
+    "email": "{{email_supervisor}}",
+    "password": "{{password_admin}}"
   }
+}
+
+assert {
+  res.status: eq 200
+  res.body.token: isString
+  res.body.usuario.email: eq {{email_supervisor}}
 }
 
 script:post-response {

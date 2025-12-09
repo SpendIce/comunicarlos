@@ -1,0 +1,22 @@
+meta {
+  name: Dashboard Operador
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{base_url}}/api/v1/reportes/dashboard-operador
+  body: none
+  auth: inherit
+}
+
+headers {
+  Authorization: Bearer {{token_operador}}
+}
+
+tests {
+  test("Debe retornar lista de disponibilidad de técnicos", function() {
+      const body = res.getBody();
+      expect(body.tecnicosDisponibilidad).to.be.an('array');
+  });
+}

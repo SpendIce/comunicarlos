@@ -14,9 +14,9 @@ headers {
   Authorization: Bearer {{token_solicitante}}
 }
 
-script:post-response {
-  test("Status code is 403", function () {
-      expect(res.getStatus()).to.equal(403);
+tests {
+  test("Debe retornar 403 Forbidden", function() {
+    expect(res.getStatus()).to.equal(403);
   });
 }
 

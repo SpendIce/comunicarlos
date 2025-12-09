@@ -1,8 +1,16 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import bcrypt
 import passlib.handlers.bcrypt
+from app.services.exceptions import (
+    NotFoundException,
+    ConflictException,
+    UnauthorizedException,
+    PermissionDeniedException,
+    BusinessRuleException
+)
 
 if not hasattr(bcrypt, '__about__'):
     class MockAbout:
@@ -70,6 +78,42 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan  # ← Gestión del ciclo de vida
 )
+@app.exception_handler(NotFoundException)
+async def not_found_handler(request: Request, exc: NotFoundException):
+    return JSONResponse(
+        status_code=404,
+        content={"detail": str(exc)}
+    )
+
+@app.exception_handler(ConflictException)
+async def conflict_handler(request: Request, exc: ConflictException):
+    return JSONResponse(
+        status_code=409,
+        content={"detail": str(exc)}
+    )
+
+@app.exception_handler(UnauthorizedException)
+async def unauthorized_handler(request: Request, exc: UnauthorizedException):
+    return JSONResponse(
+        status_code=401,
+        content={"detail": str(exc)},
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+@app.exception_handler(PermissionDeniedException)
+async def permission_handler(request: Request, exc: PermissionDeniedException):
+    return JSONResponse(
+        status_code=403,
+        content={"detail": str(exc)}
+    )
+
+@app.exception_handler(ValueError)
+async def value_error_handler(request: Request, exc: ValueError):
+    # Captura validaciones de negocio simples (ej. "nivel_urgencia requerido")
+    return JSONResponse(
+        status_code=400,
+        content={"detail": str(exc)}
+    )
 
 # CORS
 app.add_middleware(

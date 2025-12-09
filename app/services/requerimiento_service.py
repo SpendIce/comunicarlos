@@ -21,7 +21,7 @@ class RequerimientoService:
     Coordina operaciones de creación, consulta, resolución y reapertura.
     """
 
-    def __init__(self, requerimiento_repository, usuario_repository):
+    def __init__(self, requerimiento_repository, usuario_repository, notificador):
         """
         Args:
             requerimiento_repository: Repositorio de requerimientos
@@ -29,7 +29,7 @@ class RequerimientoService:
         """
         self.req_repo = requerimiento_repository
         self.usuario_repo = usuario_repository
-        self.notificador = Notificador()
+        self.notificador = notificador
 
     # ========================================================================
     # Creación de Requerimientos
@@ -107,7 +107,7 @@ class RequerimientoService:
         requerimiento_guardado = await self.req_repo.guardar(requerimiento)
 
         # Notificar (si hay supervisores)
-        self.notificador.notificar_evento(evento)
+        await self.notificador.notificar_evento(evento)
 
         return requerimiento_guardado
 
@@ -270,8 +270,9 @@ class RequerimientoService:
         # Agregar comentario si se proporciona
         if comentario_resolucion:
             from app.domain import Comentario
+            comentario_id = await self.req_repo.siguiente_id_comentario()
             comentario = Comentario(
-                id=None,
+                id=comentario_id,
                 texto=comentario_resolucion,
                 autor=tecnico,
                 requerimiento=requerimiento
@@ -286,7 +287,7 @@ class RequerimientoService:
                 comentario=comentario
             )
             requerimiento.agregar_evento(evento_comentario)
-            self.notificador.notificar_evento(evento_comentario)
+            await self.notificador.notificar_evento(evento_comentario)
 
         # Resolver requerimiento (validaciones en el dominio)
         requerimiento.resolver(tecnico)
@@ -303,7 +304,7 @@ class RequerimientoService:
         requerimiento_actualizado = await self.req_repo.guardar(requerimiento)
 
         # Notificar
-        self.notificador.notificar_evento(evento)
+        await self.notificador.notificar_evento(evento)
 
         return requerimiento_actualizado
 
@@ -354,6 +355,6 @@ class RequerimientoService:
         requerimiento_actualizado = await self.req_repo.guardar(requerimiento)
 
         # Notificar
-        self.notificador.notificar_evento(evento)
+        await self.notificador.notificar_evento(evento)
 
         return requerimiento_actualizado

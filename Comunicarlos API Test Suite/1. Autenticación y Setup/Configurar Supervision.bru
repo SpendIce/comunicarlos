@@ -7,20 +7,50 @@ meta {
 post {
   url: {{base_url}}/api/v1/usuarios/supervisores/me/supervisados
   body: json
-  auth: inherit
+  auth: bearer
 }
 
 headers {
-  Authorization: Bearer {{token_supervisor}}
   Content-Type: application/json
+}
+
+auth:bearer {
+  token: {{token_supervisor}}
 }
 
 body:json {
   {
-    "tecnicoId": {{id_tecnico}}
+    "tecnico_id": {{id_tecnico}}
   }
 }
 
-settings {
-  encodeUrl: true
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("La respuesta debe incluir listas de supervisados (snake_case)", function() {
+    const body = res.getBody();
+    expect(body).to.have.property('operadores_supervisados');
+    expect(body).to.have.property('tecnicos_supervisados');
+    
+    expect(body.operadores_supervisados).to.be.an('array');
+    expect(body.tecnicos_supervisados).to.be.an('array');
+  });
+  
+  test("El técnico debe haber sido agregado a la lista", function() {
+    const body = res.getBody();
+    const idTecnico = bru.getEnvVar("id_tecnico");
+      const listaTecnicos = body.tecnicos_supervisados;
+    
+    if (listaTecnicos && Array.isArray(listaTecnicos)) {
+        const tecnicoEncontrado = listaTecnicos.find(t => t.id === parseInt(idTecnico));
+        expect(tecnicoEncontrado).to.not.be.undefined;
+        if(tecnicoEncontrado) {
+            expect(tecnicoEncontrado.email).to.include("@comunicarlos.com.ar");
+        }
+    } else {
+        expect.fail("La lista de técnicos supervisados no es válida");
+    }
+  });
 }

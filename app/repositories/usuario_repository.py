@@ -1,83 +1,87 @@
 """
 Repositorio de Usuarios con MongoDB.
-Incluye TODA la implementación - sin interfaces separadas.
-Los métodos de mapeo están integrados en la clase.
+Implementa persistencia y reconstrucción de entidades (Usuario y sus subclases).
 """
 from typing import Optional, List
 from motor.motor_asyncio import AsyncIOMotorDatabase
-from app.domain import (
-    Usuario, Solicitante, Operador, Tecnico, Supervisor,
-    Email, Servicio
+
+# Imports explícitos de entidades para evitar ciclos con app.domain
+from app.domain.entities.usuario import (
+    Usuario, Solicitante, Operador, Tecnico, Supervisor
 )
+from app.domain.entities.servicio import Servicio
+from app.domain.value_objects.email import Email
 from app.domain.enums import TipoUsuario, TipoServicio
 from app.infrastructure.mongodb.sequence import SequenceGenerator
-from datetime import datetime
 
 
 class UsuarioRepository:
     """
-    Repositorio concreto de usuarios para MongoDB.
-    Maneja persistencia Y mapeo en una sola clase.
+    Repositorio concreto de usuarios.
+    Utiliza Aggregation Framework para lecturas complejas (joins) y métodos estándar para escrituras.
     """
 
     def __init__(self, database: AsyncIOMotorDatabase):
-        self.db = database
         self.collection = database["usuarios"]
-        self.servicios_collection = database["servicios"]
+        # No guardamos referencia a 'servicios' aquí para escritura,
+        # pero la usaremos implícitamente en los $lookup de lectura.
         self.sequence = SequenceGenerator(database)
 
     # ========================================================================
-    # CRUD Básico
+    # Operaciones de Escritura (Create / Update / Delete)
     # ========================================================================
 
     async def guardar(self, usuario: Usuario) -> Usuario:
-        """Guarda o actualiza un usuario"""
-        # Asignar ID si es nuevo
+        """
+        Guarda o actualiza un usuario en la base de datos.
+        Nota: No guarda automáticamente los servicios anidados; eso lo coordina el Servicio de Dominio.
+        """
+        # Generar ID si es un usuario nuevo
         if usuario.id is None:
             usuario.id = await self.sequence.get_next("usuario_id")
 
-        # Convertir a documento MongoDB
+        # Convertir entidad a documento BSON
         doc = self._to_document(usuario)
 
-        # Upsert
+        # Upsert (Insertar o Actualizar)
         await self.collection.replace_one(
             {"_id": usuario.id},
             doc,
             upsert=True
         )
 
-        # Guardar servicios si es solicitante
-        if isinstance(usuario, Solicitante):
-            await self._guardar_servicios(usuario)
-
         return usuario
 
-    async def buscar_por_id(self, id: int) -> Optional[Usuario]:
-        """Busca un usuario por ID"""
-        doc = await self.collection.find_one({"_id": id})
-        if not doc:
-            return None
-        return await self._to_entity(doc)
-
-    async def buscar_por_email(self, email: str) -> Optional[Usuario]:
-        """Busca un usuario por email"""
-        doc = await self.collection.find_one({"email": email})
-        if not doc:
-            return None
-        return await self._to_entity(doc)
-
-    async def existe_email(self, email: str) -> bool:
-        """Verifica si existe un email"""
-        count = await self.collection.count_documents({"email": email})
-        return count > 0
-
     async def eliminar(self, id: int) -> bool:
-        """Elimina un usuario"""
+        """Elimina un usuario por su ID"""
         result = await self.collection.delete_one({"_id": id})
         return result.deleted_count > 0
 
     # ========================================================================
-    # Consultas Específicas
+    # Operaciones de Lectura (Read)
+    # ========================================================================
+
+    async def buscar_por_id(self, id: int) -> Optional[Usuario]:
+        """
+        Busca un usuario por ID.
+        Si es un Solicitante, trae sus servicios usando $lookup.
+        """
+        return await self._buscar_uno_con_relaciones({"_id": id})
+
+    async def buscar_por_email(self, email: str) -> Optional[Usuario]:
+        """
+        Busca un usuario por Email.
+        Si es un Solicitante, trae sus servicios usando $lookup.
+        """
+        return await self._buscar_uno_con_relaciones({"email": email})
+
+    async def existe_email(self, email: str) -> bool:
+        """Verifica eficientemente si un email ya está registrado"""
+        count = await self.collection.count_documents({"email": email})
+        return count > 0
+
+    # ========================================================================
+    # Búsquedas Específicas por Rol
     # ========================================================================
 
     async def buscar_tecnicos(
@@ -86,35 +90,78 @@ class UsuarioRepository:
             skip: int = 0,
             limit: int = 100
     ) -> List[Tecnico]:
-        """Busca técnicos opcionalmente filtrados por especialidad"""
-        query = {"tipo_usuario": "TECNICO"}
+        """Recupera lista de técnicos, con filtro opcional de especialidad"""
+        query = {"tipo_usuario": TipoUsuario.TECNICO.value}
         if especialidad:
             query["especialidades"] = especialidad
 
         cursor = self.collection.find(query).skip(skip).limit(limit)
         docs = await cursor.to_list(length=limit)
 
+        # Mapeamos los documentos a entidades Tecnico
         return [await self._to_entity(doc) for doc in docs]
 
     async def buscar_operadores(self, skip: int = 0, limit: int = 100) -> List[Operador]:
-        """Busca todos los operadores"""
-        cursor = self.collection.find({"tipo_usuario": "OPERADOR"}).skip(skip).limit(limit)
+        """Recupera lista de operadores"""
+        query = {"tipo_usuario": TipoUsuario.OPERADOR.value}
+        cursor = self.collection.find(query).skip(skip).limit(limit)
         docs = await cursor.to_list(length=limit)
         return [await self._to_entity(doc) for doc in docs]
 
     async def buscar_supervisores(self, skip: int = 0, limit: int = 100) -> List[Supervisor]:
-        """Busca todos los supervisores"""
-        cursor = self.collection.find({"tipo_usuario": "SUPERVISOR"}).skip(skip).limit(limit)
+        """Recupera lista de supervisores"""
+        query = {"tipo_usuario": TipoUsuario.SUPERVISOR.value}
+        cursor = self.collection.find(query).skip(skip).limit(limit)
         docs = await cursor.to_list(length=limit)
         return [await self._to_entity(doc) for doc in docs]
 
+    async def buscar_supervisores_de_empleado(self, empleado_id: int) -> List[Supervisor]:
+        """
+        Encuentra supervisores asignados a un empleado específico (Técnico u Operador).
+        """
+        query = {
+            "tipo_usuario": TipoUsuario.SUPERVISOR.value,
+            "$or": [
+                {"operadores_ids": empleado_id},
+                {"tecnicos_ids": empleado_id}
+            ]
+        }
+        cursor = self.collection.find(query)
+        docs = await cursor.to_list(length=100)
+        return [await self._to_entity(doc) for doc in docs]
+
     # ========================================================================
-    # MAPEO: Entidad ↔ Documento
-    # Métodos privados integrados en la clase
+    # Métodos Privados de Mapeo y Agregación
     # ========================================================================
 
+    async def _buscar_uno_con_relaciones(self, filtro: dict) -> Optional[Usuario]:
+        """
+        Ejecuta una agregación para obtener el usuario y sus servicios (JOIN) en una sola consulta.
+        """
+        pipeline = [
+            {"$match": filtro},
+            # Hacemos LEFT JOIN con la colección de servicios
+            {
+                "$lookup": {
+                    "from": "servicios",
+                    "localField": "_id",
+                    "foreignField": "solicitante_id",
+                    "as": "servicios_data" # Los servicios quedarán en este array temporal
+                }
+            }
+        ]
+
+        cursor = self.collection.aggregate(pipeline)
+        resultados = await cursor.to_list(length=1)
+
+        if not resultados:
+            return None
+
+        # Convertimos el documento enriquecido a Entidad
+        return await self._to_entity(resultados[0])
+
     def _to_document(self, usuario: Usuario) -> dict:
-        """Convierte entidad de dominio a documento MongoDB"""
+        """Serializa la Entidad a estructura de MongoDB"""
         doc = {
             "_id": usuario.id,
             "nombre": usuario.nombre,
@@ -125,107 +172,74 @@ class UsuarioRepository:
             "ultimo_acceso": usuario.ultimo_acceso
         }
 
-        # Campos específicos por tipo
+        # Persistir campos específicos según subclase
         if isinstance(usuario, Tecnico):
-            doc["especialidades"] = usuario.especialidades
+            doc["especialidades"] = getattr(usuario, "especialidades", [])
+
         elif isinstance(usuario, Supervisor):
+            # Guardamos solo los IDs de las referencias para mantener consistencia
             doc["operadores_ids"] = [op.id for op in usuario.operadores_supervisados if op.id]
             doc["tecnicos_ids"] = [tec.id for tec in usuario.tecnicos_supervisados if tec.id]
 
         return doc
 
     async def _to_entity(self, doc: dict) -> Usuario:
-        """Convierte documento MongoDB a entidad de dominio"""
+        """
+        Deserializa el documento MongoDB a la Entidad correcta.
+        Maneja la reconstrucción de objetos ValueObject (Email) y listas anidadas.
+        """
+        # Value Objects
         email = Email(doc["email"])
-        tipo = TipoUsuario(doc["tipo_usuario"])
+
+        # Determinación de tipo para instanciar la clase correcta
+        tipo_str = doc.get("tipo_usuario")
+        try:
+            tipo = TipoUsuario(tipo_str)
+        except ValueError:
+            # Fallback por si el dato en BD no coincide exactamente
+            tipo = TipoUsuario.SOLICITANTE
+
+        base_args = {
+            "id": doc["_id"],
+            "nombre": doc["nombre"],
+            "email": email,
+            "password_hash": doc["password_hash"],
+            "fecha_creacion": doc.get("fecha_creacion"),
+            "ultimo_acceso": doc.get("ultimo_acceso")
+        }
 
         if tipo == TipoUsuario.SOLICITANTE:
-            # Cargar servicios
-            servicios = await self._cargar_servicios(doc["_id"])
+            servicios = []
+            if "servicios_data" in doc:
+                for s_data in doc["servicios_data"]:
+                    servicios.append(Servicio(
+                        id=s_data["_id"],
+                        tipo=TipoServicio(s_data["tipo"]),
+                        numero_servicio=s_data["numero_servicio"],
+                        solicitante=None,
+                        activo=s_data["activo"],
+                        fecha_alta=s_data.get("fecha_alta")
+                    ))
+
             return Solicitante(
-                id=doc["_id"],
-                nombre=doc["nombre"],
-                email=email,
-                password_hash=doc["password_hash"],
-                servicios_suscritos=servicios,
-                fecha_creacion=doc["fecha_creacion"],
-                ultimo_acceso=doc.get("ultimo_acceso")
+                **base_args,
+                servicios_suscritos=servicios
             )
 
         elif tipo == TipoUsuario.OPERADOR:
-            return Operador(
-                id=doc["_id"],
-                nombre=doc["nombre"],
-                email=email,
-                password_hash=doc["password_hash"],
-                fecha_creacion=doc["fecha_creacion"],
-                ultimo_acceso=doc.get("ultimo_acceso")
-            )
+            return Operador(**base_args)
 
         elif tipo == TipoUsuario.TECNICO:
             return Tecnico(
-                id=doc["_id"],
-                nombre=doc["nombre"],
-                email=email,
-                password_hash=doc["password_hash"],
-                especialidades=doc.get("especialidades", []),
-                fecha_creacion=doc["fecha_creacion"],
-                ultimo_acceso=doc.get("ultimo_acceso")
+                **base_args,
+                especialidades=doc.get("especialidades", [])
             )
 
-        else:  # SUPERVISOR
-            # Cargar operadores y técnicos supervisados (lazy loading simple)
-            return Supervisor(
-                id=doc["_id"],
-                nombre=doc["nombre"],
-                email=email,
-                password_hash=doc["password_hash"],
-                fecha_creacion=doc["fecha_creacion"],
-                ultimo_acceso=doc.get("ultimo_acceso")
-            )
+        elif tipo == TipoUsuario.SUPERVISOR:
+            # Nota: Los supervisados se cargan "lazy" o mediante otra consulta si se requieren completos.
+            # Aquí devolvemos el Supervisor base.
+            return Supervisor(**base_args)
 
-    # ========================================================================
-    # Helpers para relaciones
-    # ========================================================================
-
-    async def _guardar_servicios(self, solicitante: Solicitante) -> None:
-        """Guarda los servicios de un solicitante"""
-        for servicio in solicitante.servicios_suscritos:
-            if servicio.id is None:
-                servicio.id = await self.sequence.get_next("servicio_id")
-
-            doc = {
-                "_id": servicio.id,
-                "tipo": servicio.tipo.value,
-                "numero_servicio": servicio.numero_servicio,
-                "solicitante_id": solicitante.id,
-                "activo": servicio.activo,
-                "fecha_alta": servicio.fecha_alta
-            }
-
-            await self.servicios_collection.replace_one(
-                {"_id": servicio.id},
-                doc,
-                upsert=True
-            )
-
-    async def _cargar_servicios(self, solicitante_id: int) -> List[Servicio]:
-        """Carga los servicios de un solicitante"""
-        cursor = self.servicios_collection.find({"solicitante_id": solicitante_id})
-        docs = await cursor.to_list(length=100)
-
-        servicios = []
-        for doc in docs:
-            # Necesitamos una referencia al solicitante (circular)
-            # Para evitar recursión infinita, creamos un stub
-            servicio = Servicio(
-                id=doc["_id"],
-                tipo=TipoServicio(doc["tipo"]),
-                numero_servicio=doc["numero_servicio"],
-                solicitante=None,  # Se asigna después
-                activo=doc["activo"],
-                fecha_alta=doc["fecha_alta"]
-            )
-            servicios.append(servicio)
-
-        return servicios
+        else:
+            # Fallback seguro
+            return Usuario(**base_args)

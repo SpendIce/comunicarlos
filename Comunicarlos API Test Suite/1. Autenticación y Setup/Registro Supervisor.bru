@@ -17,12 +17,12 @@ headers {
 body:json {
   {
     "nombre": "Ana Supervisora",
-    "email": "ana@comunicarlos.com.ar",
-    "password": "AdminPass123!",
-    "tipoUsuario": "SUPERVISOR"
+    "email": "{{email_supervisor}}",
+    "password": "{{password_admin}}",
+    "tipo_usuario": "SUPERVISOR"
   }
 }
 
-settings {
-  encodeUrl: true
+assert {
+  res.status: eq 201
 }

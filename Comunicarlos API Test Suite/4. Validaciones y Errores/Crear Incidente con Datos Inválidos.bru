@@ -23,10 +23,8 @@ body:json {
   }
 }
 
-script:post-response {
-  test("Status code is 422", function () {
-      expect(res.getStatus()).to.equal(422);
-  });
+assert {
+  res.status: eq 422
 }
 
 settings {
