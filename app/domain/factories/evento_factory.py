@@ -1,5 +1,5 @@
-from typing import Optional, Dict, Any
 from datetime import datetime
+from typing import Optional
 from app.domain.enums import TipoEvento
 from app.domain.entities.evento import (
     Evento,
@@ -14,10 +14,13 @@ from app.domain.entities.evento import (
 
 class EventoFactory:
     """
-    Factory para crear diferentes tipos de eventos - Factory Pattern (Clásico)
+    [Patrón Factory Method]
+    Centraliza la lógica de instanciación de la jerarquía de eventos.
 
-    Implementa el patrón Factory con un único método 'crear_evento' que
-    determina qué tipo de evento instanciar según el tipo recibido.
+    Beneficio POO: Desacoplamiento. Los servicios no necesitan conocer las
+    clases concretas (EventoAsignacion, EventoDerivacion, etc.) ni sus
+    constructores específicos. Si mañana cambia cómo se construye un evento,
+    solo modificamos esta clase.
     """
 
     @staticmethod
@@ -28,178 +31,88 @@ class EventoFactory:
             **kwargs
     ) -> Evento:
         """
-        Método principal del Factory Pattern.
-        Crea un evento según el tipo especificado.
-
-        Args:
-            tipo: TipoEvento que determina qué evento crear
-            requerimiento: Requerimiento asociado al evento
-            responsable: Usuario responsable del evento
-            **kwargs: Parámetros adicionales específicos de cada tipo de evento
-
-        Returns:
-            Evento: Instancia del tipo de evento correspondiente
-
-        Raises:
-            ValueError: Si el tipo de evento no es válido
-
-        Ejemplos:
-            # Crear evento de creación
-            evento = EventoFactory.crear_evento(
-                TipoEvento.CREACION,
-                requerimiento=req,
-                responsable=solicitante
-            )
-
-            # Crear evento de asignación
-            evento = EventoFactory.crear_evento(
-                TipoEvento.ASIGNACION,
-                requerimiento=req,
-                responsable=operador,
-                tecnico_asignado=tecnico
-            )
+        Crea una instancia concreta de Evento basada en el 'tipo'.
+        Valida que los argumentos necesarios para ese tipo específico estén presentes.
         """
-        # Mapeo de tipos a métodos privados de creación
-        factory_methods = {
-            TipoEvento.CREACION: EventoFactory._crear_evento_creacion,
-            TipoEvento.ASIGNACION: EventoFactory._crear_evento_asignacion,
-            TipoEvento.DERIVACION: EventoFactory._crear_evento_derivacion,
-            TipoEvento.RESOLUCION: EventoFactory._crear_evento_resolucion,
-            TipoEvento.REAPERTURA: EventoFactory._crear_evento_reapertura,
-            TipoEvento.COMENTARIO: EventoFactory._crear_evento_comentario,
+
+        # Diccionario de estrategias (Dispatch Table) para evitar múltiples if/else
+        constructores = {
+            TipoEvento.CREACION: EventoFactory._crear_creacion,
+            TipoEvento.ASIGNACION: EventoFactory._crear_asignacion,
+            TipoEvento.DERIVACION: EventoFactory._crear_derivacion,
+            TipoEvento.RESOLUCION: EventoFactory._crear_resolucion,
+            TipoEvento.REAPERTURA: EventoFactory._crear_reapertura,
+            TipoEvento.COMENTARIO: EventoFactory._crear_comentario,
         }
 
-        # Obtener el método correspondiente al tipo
-        factory_method = factory_methods.get(tipo)
+        constructor = constructores.get(tipo)
+        if not constructor:
+            raise ValueError(f"Tipo de evento no soportado por la fábrica: {tipo}")
 
-        if factory_method is None:
-            raise ValueError(f"Tipo de evento no válido: {tipo}")
+        # Delegamos la creación al método específico
+        return constructor(requerimiento, responsable, **kwargs)
 
-        # Llamar al método específico con los parámetros
-        return factory_method(
-            requerimiento=requerimiento,
-            responsable=responsable,
-            **kwargs
-        )
-        
-    # ========================================================================
-    # Métodos privados para crear cada tipo específico de evento
-    # ========================================================================
+    # ==========================================================================
+    # Métodos Privados de Construcción (Helpers)
+    # Encapsulan la validación específica de cada tipo de evento.
+    # ==========================================================================
 
     @staticmethod
-    def _crear_evento_creacion(
-        requerimiento,
-        responsable,
-        fecha_hora: Optional[datetime] = None,
-        **kwargs
-    ) -> EventoCreacion:
-        """Método privado para crear EventoCreacion"""
-        return EventoCreacion(
-            id=None,
-            responsable=responsable,
-            requerimiento=requerimiento,
-            fecha_hora=fecha_hora
-        )
+    def _crear_creacion(req, resp, **kwargs) -> EventoCreacion:
+        return EventoCreacion(id=None, responsable=resp, requerimiento=req)
 
     @staticmethod
-    def _crear_evento_asignacion(
-        requerimiento,
-        responsable,
-        tecnico_asignado=None,
-        fecha_hora: Optional[datetime] = None,
-        **kwargs
-    ) -> EventoAsignacion:
-        """Método privado para crear EventoAsignacion"""
-        if tecnico_asignado is None:
-            raise ValueError("tecnico_asignado es requerido para EventoAsignacion")
+    def _crear_asignacion(req, resp, tecnico_asignado=None, **kwargs) -> EventoAsignacion:
+        if not tecnico_asignado:
+            raise ValueError("Error de Factory: Se requiere 'tecnico_asignado' para eventos de Asignación.")
 
         return EventoAsignacion(
             id=None,
-            responsable=responsable,
-            requerimiento=requerimiento,
-            tecnico_asignado=tecnico_asignado,
-            fecha_hora=fecha_hora
+            responsable=resp,
+            requerimiento=req,
+            tecnico_asignado=tecnico_asignado
         )
 
     @staticmethod
-    def _crear_evento_derivacion(
-        requerimiento,
-        responsable,
-        tecnico_origen=None,
-        tecnico_destino=None,
-        motivo: Optional[str] = None,
-        fecha_hora: Optional[datetime] = None,
-        **kwargs
-    ) -> EventoDerivacion:
-        """Método privado para crear EventoDerivacion"""
-        if tecnico_origen is None:
-            raise ValueError("tecnico_origen es requerido para EventoDerivacion")
-        if tecnico_destino is None:
-            raise ValueError("tecnico_destino es requerido para EventoDerivacion")
-        if motivo is None:
-            raise ValueError("motivo es requerido para EventoDerivacion")
+    def _crear_derivacion(req, resp, tecnico_origen=None, tecnico_destino=None, motivo=None,
+                          **kwargs) -> EventoDerivacion:
+        # Validación de integridad de datos obligatoria para derivaciones
+        if not all([tecnico_origen, tecnico_destino, motivo]):
+            raise ValueError("Error de Factory: Derivación requiere técnico origen, destino y motivo.")
 
         return EventoDerivacion(
             id=None,
-            responsable=responsable,
-            requerimiento=requerimiento,
+            responsable=resp,
+            requerimiento=req,
             tecnico_origen=tecnico_origen,
             tecnico_destino=tecnico_destino,
-            motivo=motivo,
-            fecha_hora=fecha_hora
+            motivo=motivo
         )
 
     @staticmethod
-    def _crear_evento_resolucion(
-        requerimiento,
-        responsable,
-        fecha_hora: Optional[datetime] = None,
-        **kwargs
-    ) -> EventoResolucion:
-        """Método privado para crear EventoResolucion"""
-        return EventoResolucion(
-            id=None,
-            responsable=responsable,
-            requerimiento=requerimiento,
-            fecha_hora=fecha_hora
-        )
+    def _crear_resolucion(req, resp, **kwargs) -> EventoResolucion:
+        return EventoResolucion(id=None, responsable=resp, requerimiento=req)
 
     @staticmethod
-    def _crear_evento_reapertura(
-        requerimiento,
-        responsable,
-        motivo: Optional[str] = None,
-        fecha_hora: Optional[datetime] = None,
-        **kwargs
-    ) -> EventoReapertura:
-        """Método privado para crear EventoReapertura"""
-        if motivo is None:
-            raise ValueError("motivo es requerido para EventoReapertura")
+    def _crear_reapertura(req, resp, motivo=None, **kwargs) -> EventoReapertura:
+        if not motivo:
+            raise ValueError("Error de Factory: Se debe especificar un motivo para reabrir un caso.")
 
         return EventoReapertura(
             id=None,
-            responsable=responsable,
-            requerimiento=requerimiento,
-            motivo=motivo,
-            fecha_hora=fecha_hora
+            responsable=resp,
+            requerimiento=req,
+            motivo=motivo
         )
 
     @staticmethod
-    def _crear_evento_comentario(
-        requerimiento,
-        responsable,
-        comentario=None,
-        fecha_hora: Optional[datetime] = None,
-        **kwargs
-    ) -> EventoComentario:
-        """Método privado para crear EventoComentario"""
-        if comentario is None:
-            raise ValueError("comentario es requerido para EventoComentario")
+    def _crear_comentario(req, resp, comentario=None, **kwargs) -> EventoComentario:
+        if not comentario:
+            raise ValueError("Error de Factory: El contenido del comentario es obligatorio.")
 
         return EventoComentario(
             id=None,
-            responsable=responsable,
-            requerimiento=requerimiento,
-            comentario=comentario,
-            fecha_hora=fecha_hora
+            responsable=resp,
+            requerimiento=req,
+            comentario=comentario
         )

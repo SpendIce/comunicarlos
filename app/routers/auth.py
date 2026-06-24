@@ -1,82 +1,56 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from typing import Annotated
-from app.schemas.auth import LoginRequest, LoginResponse, RegistroRequest, UsuarioResponse, RefreshTokenResponse
-from app.services.authentication_service import AutenticacionService
-from app.dependencies.services import get_auth_service
-from app.services.exceptions import UnauthorizedException
+from fastapi.security import OAuth2PasswordRequestForm
+from app.schemas.usuario import UsuarioCreate, UsuarioRead, UsuarioLogin
+from app.services.authentication_service import AuthenticationService
+from app.dependencies import get_auth_service
+from app.domain.exceptions import CredencialesInvalidasException, EmailInvalidoException
 
-router = APIRouter()
-security = HTTPBearer()
+router = APIRouter(prefix="/auth", tags=["Autenticación"])
 
 
-@router.post("/registro", response_model=UsuarioResponse, status_code=status.HTTP_201_CREATED)
-async def registro(
-        request: RegistroRequest,
-        service: AutenticacionService = Depends(get_auth_service)
-):
-    servicios = [s.model_dump() for s in request.servicios_suscritos] if request.servicios_suscritos else None
-
-    nuevo_usuario = await service.registrar_usuario(
-        nombre=request.nombre,
-        email=request.email,
-        password=request.password,
-        tipo_usuario=request.tipo_usuario,
-        servicios_suscritos=servicios
-    )
-    return nuevo_usuario
-
-
-
-@router.post("/login", response_model=LoginResponse)
-async def login(
-        request: LoginRequest,
-        service: AutenticacionService = Depends(get_auth_service)
-):
-    usuario, token = await service.autenticar(request.email, request.password)
-    return LoginResponse(
-        token=token,
-        usuario=usuario
-    )
-
-
-@router.post(
-    "/logout",
-    status_code=status.HTTP_200_OK,
-    summary="Cerrar sesión"
-)
-async def logout(
-        credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)],
-        service: AutenticacionService = Depends(get_auth_service)
+@router.post("/login")
+def login(
+        form_data: OAuth2PasswordRequestForm = Depends(),
+        service: AuthenticationService = Depends(get_auth_service)
 ):
     """
-    Cerrar sesión. Invalida el token actual agregándolo a una lista de bloqueo.
+    Endpoint estándar OAuth2 para obtener token.
+    Recibe username (email) y password.
     """
-    token = credentials.credentials
-    await service.revocar_token(token)
+    try:
+        # El servicio devuelve el usuario hidratado si es válido
+        usuario = service.autenticar(form_data.username, form_data.password)
 
-    return {"message": "Sesión cerrada exitosamente"}
+        # Generar token (Lógica delegada al servicio o infraestructura)
+        token = service.generar_token_acceso(usuario)
 
-@router.post(
-    "/refresh",
-    response_model=RefreshTokenResponse,
-    summary="Renovar token",
-    description="Obtener un nuevo token JWT sin necesidad de login"
-)
-async def refresh_token(credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)],
-                        service: AutenticacionService = Depends(get_auth_service)):
+        return {"access_token": token, "token_type": "bearer"}
+
+    except CredencialesInvalidasException as e:
+        raise HTTPException(status_code=401, detail=str(e))
+
+
+@router.post("/register", response_model=UsuarioRead, status_code=201)
+def registrar_usuario(
+        usuario_in: UsuarioCreate,
+        service: AuthenticationService = Depends(get_auth_service)
+):
     """
-    Genera un nuevo token JWT para un usuario ya autenticado.
+    Registra un nuevo usuario en el sistema.
+    Maneja excepciones de dominio como 'Email inválido'.
     """
-    token_actual = credentials.credentials
-    # Obtenemos el usuario del token actual (valida que no haya expirado aún)
-    usuario = await service.obtener_usuario_desde_token(token_actual)
+    try:
+        nuevo_usuario = service.registrar_usuario(
+            nombre=usuario_in.nombre,
+            email=usuario_in.email,
+            password=usuario_in.password,
+            tipo=usuario_in.tipo,
+            # Argumentos variables para técnicos/supervisores
+            especialidades=getattr(usuario_in, 'especialidades', [])
+        )
+        return nuevo_usuario
 
-    # Generamos uno nuevo
-    nuevo_token = service.crear_token_acceso(usuario)
-
-    return {
-        "token": nuevo_token,
-        "tipo": "Bearer",
-        "expires_in": 86400  # O el valor configurado en settings
-    }
+    except EmailInvalidoException as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))

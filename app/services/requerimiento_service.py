@@ -1,360 +1,217 @@
 from typing import List, Optional
-from app.domain import (
-    Requerimiento, Incidente, Solicitud,
-    Solicitante, Operador, Tecnico,
-    EventoFactory, Notificador, Usuario
-)
-from app.domain.enums import (
-    TipoRequerimiento, EstadoRequerimiento,
-    NivelUrgencia, CategoriaIncidente, CategoriaSolicitud, TipoEvento
-)
-from app.domain.exceptions import (
-    EstadoInvalidoException,
-    PermisosDenegadosException
-)
-from app.services.exceptions import NotFoundException, UnauthorizedException
+from datetime import datetime
+
+# Dominio
+from app.domain.entities.requerimiento import Requerimiento
+from app.domain.enums import TipoEvento, EstadoRequerimiento
+from app.domain.factories.evento_factory import EventoFactory
+from app.domain.exceptions import PermisosDenegadosException, RecursoNoEncontradoException
 
 
 class RequerimientoService:
     """
-    Servicio de gestión de requerimientos.
-    Coordina operaciones de creación, consulta, resolución y reapertura.
+    Servicio Principal del Core de Negocio.
+    Patrón: Fachada (Facade) para la gestión del ciclo de vida de los requerimientos.
+
+    Este servicio orquesta la interacción entre:
+    1. Las Entidades (Reglas de negocio)
+    2. Los Repositorios (Persistencia)
+    3. El Factory de Eventos (Historial)
+    4. El Servicio de Notificaciones (Observabilidad)
     """
 
-    def __init__(self, requerimiento_repository, usuario_repository, notificador):
-        """
-        Args:
-            requerimiento_repository: Repositorio de requerimientos
-            usuario_repository: Repositorio de usuarios
-        """
-        self.req_repo = requerimiento_repository
-        self.usuario_repo = usuario_repository
-        self.notificador = notificador
-
-    # ========================================================================
-    # Creación de Requerimientos
-    # ========================================================================
-
-    async def crear_requerimiento(
+    def __init__(
             self,
-            solicitante_id: int,
-            tipo: TipoRequerimiento,
-            titulo: str,
-            descripcion: str,
-            categoria: str,
-            nivel_urgencia: Optional[NivelUrgencia] = None
-    ) -> Requerimiento:
-        """
-        Crea un nuevo requerimiento (incidente o solicitud).
+            requerimiento_repo,
+            usuario_repo,
+            notificacion_service
+    ):
+        self.requerimiento_repo = requerimiento_repo
+        self.usuario_repo = usuario_repo
+        self.notificacion_service = notificacion_service
 
-        Args:
-            solicitante_id: ID del solicitante
-            tipo: INCIDENTE o SOLICITUD
-            titulo: Título del requerimiento
-            descripcion: Descripción detallada
-            categoria: Categoría específica
-            nivel_urgencia: Urgencia (solo para incidentes)
+    # =================================================================
+    # CASOS DE USO: CREACIÓN
+    # =================================================================
 
-        Returns:
-            Requerimiento: Requerimiento creado
+    def crear_incidente(self, solicitante_id: int, titulo: str, descripcion: str,
+                        urgencia, categoria) -> Requerimiento:
+        """Coordina el alta de un nuevo Incidente."""
 
-        Raises:
-            NotFoundException: Si el solicitante no existe
-            ValueError: Si los datos son inválidos
-        """
-        # Obtener solicitante
-        solicitante = await self.usuario_repo.buscar_por_id(solicitante_id)
-        if not solicitante or not isinstance(solicitante, Solicitante):
-            raise NotFoundException(f"Solicitante {solicitante_id} no encontrado")
+        # 1. Recuperar al actor
+        solicitante = self._get_usuario(solicitante_id)
 
-        # Crear requerimiento según tipo
-        if tipo == TipoRequerimiento.INCIDENTE:
-            if nivel_urgencia is None:
-                raise ValueError("nivel_urgencia es requerido para incidentes")
+        # 2. Instanciar Entidad (La validación ocurre dentro del __init__ de la entidad)
+        # Aquí se nota la inversión de control: el dominio controla la creación.
+        from app.domain.entities.requerimiento import Incidente
+        incidente = Incidente(
+            id=None,
+            titulo=titulo,
+            descripcion=descripcion,
+            solicitante=solicitante,
+            nivel_urgencia=urgencia,
+            categoria=categoria
+        )
 
-            requerimiento = Incidente(
-                id=None,
-                titulo=titulo,
-                descripcion=descripcion,
-                solicitante=solicitante,
-                nivel_urgencia=nivel_urgencia,
-                categoria=CategoriaIncidente[categoria],
-                estado=EstadoRequerimiento.NUEVO
-            )
-
-        elif tipo == TipoRequerimiento.SOLICITUD:
-            requerimiento = Solicitud(
-                id=None,
-                titulo=titulo,
-                descripcion=descripcion,
-                solicitante=solicitante,
-                categoria=CategoriaSolicitud[categoria],
-                estado=EstadoRequerimiento.NUEVO
-            )
-
-        else:
-            raise ValueError(f"Tipo de requerimiento inválido: {tipo}")
-
-        # Crear evento de creación
+        # 3. Registrar Evento de Creación (Auditabilidad)
         evento = EventoFactory.crear_evento(
             tipo=TipoEvento.CREACION,
-            requerimiento=requerimiento,
+            requerimiento=incidente,
             responsable=solicitante
         )
-        requerimiento.agregar_evento(evento)
+        incidente.agregar_evento(evento)
 
-        # Guardar en repositorio
-        requerimiento_guardado = await self.req_repo.guardar(requerimiento)
+        # 4. Persistir
+        nuevo_incidente = self.requerimiento_repo.guardar(incidente)
+        return nuevo_incidente
 
-        # Notificar (si hay supervisores)
-        await self.notificador.notificar_evento(evento)
+    def crear_solicitud(self, solicitante_id: int, titulo: str, descripcion: str,
+                        categoria) -> Requerimiento:
+        """Coordina el alta de una nueva Solicitud de Servicio."""
+        solicitante = self._get_usuario(solicitante_id)
 
-        return requerimiento_guardado
-
-    # ========================================================================
-    # Consultas
-    # ========================================================================
-
-    async def obtener_requerimiento(
-            self,
-            requerimiento_id: int,
-            usuario_actual: Usuario
-    ) -> Requerimiento:
-        """
-        Obtiene un requerimiento por ID con control de permisos.
-
-        Args:
-            requerimiento_id: ID del requerimiento
-            usuario_actual: Usuario que realiza la consulta
-
-        Returns:
-            Requerimiento: Requerimiento encontrado
-
-        Raises:
-            NotFoundException: Si no existe
-            UnauthorizedException: Si no tiene permisos
-        """
-        requerimiento = await self.req_repo.buscar_por_id(requerimiento_id)
-        if not requerimiento:
-            raise NotFoundException(f"Requerimiento {requerimiento_id} no encontrado")
-
-        # Verificar permisos
-        if not usuario_actual.puede_ver_requerimiento(requerimiento):
-            raise UnauthorizedException(
-                "No tiene permisos para ver este requerimiento"
-            )
-
-        return requerimiento
-
-    async def listar_requerimientos(
-            self,
-            usuario_actual: Usuario,
-            estado: Optional[EstadoRequerimiento] = None,
-            tipo: Optional[TipoRequerimiento] = None,
-            page: int = 0,
-            size: int = 20
-    ) -> tuple[List[Requerimiento], int]:
-        """
-        Lista requerimientos según permisos del usuario.
-
-        Args:
-            usuario_actual: Usuario que realiza la consulta
-            estado: Filtro por estado (opcional)
-            tipo: Filtro por tipo (opcional)
-            page: Número de página
-            size: Tamaño de página
-
-        Returns:
-            tuple: (lista_requerimientos, total_elementos)
-        """
-        # Aplicar filtros según tipo de usuario
-        if isinstance(usuario_actual, Solicitante):
-            # Solicitantes solo ven sus propios requerimientos
-            requerimientos = await self.req_repo.buscar_por_solicitante(
-                solicitante_id=usuario_actual.id,
-                estado=estado,
-                tipo=tipo,
-                page=page,
-                size=size
-            )
-
-        elif isinstance(usuario_actual, Tecnico):
-            # Técnicos solo ven requerimientos asignados a ellos
-            requerimientos = await self.req_repo.buscar_por_tecnico(
-                tecnico_id=usuario_actual.id,
-                estado=estado,
-                tipo=tipo,
-                page=page,
-                size=size
-            )
-
-        else:
-            # Operadores y Supervisores ven todos
-            requerimientos = await self.req_repo.buscar_todos(
-                estado=estado,
-                tipo=tipo,
-                page=page,
-                size=size
-            )
-
-        total = self.req_repo.contar(
-            usuario=usuario_actual,
-            estado=estado,
-            tipo=tipo
+        from app.domain.entities.requerimiento import Solicitud
+        solicitud = Solicitud(
+            id=None,
+            titulo=titulo,
+            descripcion=descripcion,
+            solicitante=solicitante,
+            categoria=categoria
         )
 
-        return requerimientos, total
+        evento = EventoFactory.crear_evento(TipoEvento.CREACION, solicitud, solicitante)
+        solicitud.agregar_evento(evento)
 
-    async def obtener_requerimientos_priorizados(
-            self,
-            estado: EstadoRequerimiento = EstadoRequerimiento.NUEVO,
-            limite: int = 10
-    ) -> List[Requerimiento]:
+        return self.requerimiento_repo.guardar(solicitud)
+
+    # =================================================================
+    # CASOS DE USO: GESTIÓN (ASIGNAR, RESOLVER, DERIVAR)
+    # =================================================================
+
+    def asignar_tecnico(self, id_req: int, id_operador: int, id_tecnico: int):
         """
-        Obtiene requerimientos ordenados por prioridad.
-
-        Args:
-            estado: Estado de los requerimientos
-            limite: Cantidad máxima a retornar
-
-        Returns:
-            List[Requerimiento]: Lista ordenada por prioridad
+        Un Operador asigna un técnico a un requerimiento.
         """
-        requerimientos = await self.req_repo.buscar_por_estado(estado)
+        # 1. Obtener Agregados
+        req = self._get_requerimiento(id_req)
+        operador = self._get_usuario(id_operador)
+        tecnico = self._get_usuario(id_tecnico)
 
-        # Ordenar por prioridad (mayor primero)
-        requerimientos_ordenados = sorted(
-            requerimientos,
-            key=lambda r: r.calcular_prioridad(),
-            reverse=True
+        # 2. Validar Permisos (Polimorfismo)
+        # El método 'puede_asignar_requerimiento' debe existir en Operador
+        if not hasattr(operador, 'puede_asignar_requerimiento') or not operador.puede_asignar_requerimiento():
+            raise PermisosDenegadosException("Solo los operadores pueden asignar requerimientos.")
+
+        # 3. Ejecutar Lógica de Dominio (Cambio de estado)
+        req.asignar_tecnico(tecnico, operador)
+
+        # 4. Generar Evento Histórico
+        evento = EventoFactory.crear_evento(
+            tipo=TipoEvento.ASIGNACION,
+            requerimiento=req,
+            responsable=operador,
+            tecnico_asignado=tecnico
         )
+        req.agregar_evento(evento)
 
-        return requerimientos_ordenados[:limite]
+        # 5. Persistir y Notificar (Efectos colaterales)
+        self.requerimiento_repo.actualizar(req)
+        self.notificacion_service.notificar_accion(evento, tecnico)  # Avisar al supervisado
 
-    # ========================================================================
-    # Resolución y Reapertura
-    # ========================================================================
-
-    async def resolver_requerimiento(
-            self,
-            requerimiento_id: int,
-            tecnico_id: int,
-            comentario_resolucion: Optional[str] = None
-    ) -> Requerimiento:
+    def derivar_requerimiento(self, id_req: int, id_tecnico_origen: int,
+                              id_tecnico_destino: int, motivo: str):
         """
-        Marca un requerimiento como resuelto.
-
-        Args:
-            requerimiento_id: ID del requerimiento
-            tecnico_id: ID del técnico que resuelve
-            comentario_resolucion: Comentario opcional
-
-        Returns:
-            Requerimiento: Requerimiento actualizado
-
-        Raises:
-            NotFoundException: Si no existe
-            UnauthorizedException: Si no tiene permisos
-            EstadoInvalidoException: Si el estado no permite resolución
+        Un Técnico deriva el trabajo a otro colega (Interconsulta).
         """
-        # Obtener requerimiento
-        requerimiento = await self.req_repo.buscar_por_id(requerimiento_id)
-        if not requerimiento:
-            raise NotFoundException(f"Requerimiento {requerimiento_id} no encontrado")
+        req = self._get_requerimiento(id_req)
+        origen = self._get_usuario(id_tecnico_origen)
+        destino = self._get_usuario(id_tecnico_destino)
 
-        # Obtener técnico
-        tecnico = await self.usuario_repo.buscar_por_id(tecnico_id)
-        if not tecnico or not isinstance(tecnico, Tecnico):
-            raise NotFoundException(f"Técnico {tecnico_id} no encontrado")
+        # Validación de dominio delegada a la entidad
+        req.derivar_a_tecnico(destino, origen, motivo)
 
-        # Agregar comentario si se proporciona
-        if comentario_resolucion:
-            from app.domain import Comentario
-            comentario_id = await self.req_repo.siguiente_id_comentario()
-            comentario = Comentario(
-                id=comentario_id,
-                texto=comentario_resolucion,
-                autor=tecnico,
-                requerimiento=requerimiento
-            )
-            requerimiento.agregar_comentario(comentario)
+        evento = EventoFactory.crear_evento(
+            tipo=TipoEvento.DERIVACION,
+            requerimiento=req,
+            responsable=origen,
+            tecnico_origen=origen,
+            tecnico_destino=destino,
+            motivo=motivo
+        )
+        req.agregar_evento(evento)
 
-            # Evento de comentario
-            evento_comentario = EventoFactory.crear_evento(
-                tipo=TipoEvento.COMENTARIO,
-                requerimiento=requerimiento,
-                responsable=tecnico,
-                comentario=comentario
-            )
-            requerimiento.agregar_evento(evento_comentario)
-            await self.notificador.notificar_evento(evento_comentario)
+        self.requerimiento_repo.actualizar(req)
+        self.notificacion_service.notificar_accion(evento, origen)
 
-        # Resolver requerimiento (validaciones en el dominio)
-        requerimiento.resolver(tecnico)
+    def resolver_requerimiento(self, id_req: int, id_tecnico: int):
+        """
+        El técnico marca el fin del trabajo.
+        """
+        req = self._get_requerimiento(id_req)
+        tecnico = self._get_usuario(id_tecnico)
 
-        # Crear evento de resolución
+        # La entidad valida si el técnico es el asignado
+        req.resolver(tecnico)
+
         evento = EventoFactory.crear_evento(
             tipo=TipoEvento.RESOLUCION,
-            requerimiento=requerimiento,
+            requerimiento=req,
             responsable=tecnico
         )
-        requerimiento.agregar_evento(evento)
+        req.agregar_evento(evento)
 
-        # Guardar
-        requerimiento_actualizado = await self.req_repo.guardar(requerimiento)
+        self.requerimiento_repo.actualizar(req)
+        self.notificacion_service.notificar_accion(evento, tecnico)
 
-        # Notificar
-        await self.notificador.notificar_evento(evento)
-
-        return requerimiento_actualizado
-
-    async def reabrir_requerimiento(
-            self,
-            requerimiento_id: int,
-            usuario_id: int,
-            motivo: str
-    ) -> Requerimiento:
+    def reabrir_requerimiento(self, id_req: int, id_usuario: int, motivo: str):
         """
-        Reabre un requerimiento resuelto.
-
-        Args:
-            requerimiento_id: ID del requerimiento
-            usuario_id: ID del usuario que reabre
-            motivo: Motivo de reapertura
-
-        Returns:
-            Requerimiento: Requerimiento actualizado
-
-        Raises:
-            NotFoundException: Si no existe
-            EstadoInvalidoException: Si no está resuelto
+        Permite reabrir un caso si el usuario no está conforme.
         """
-        # Obtener requerimiento
-        requerimiento = await self.req_repo.buscar_por_id(requerimiento_id)
-        if not requerimiento:
-            raise NotFoundException(f"Requerimiento {requerimiento_id} no encontrado")
+        req = self._get_requerimiento(id_req)
+        usuario = self._get_usuario(id_usuario)
 
-        # Obtener usuario
-        usuario = await self.usuario_repo.buscar_por_id(usuario_id)
-        if not usuario:
-            raise NotFoundException(f"Usuario {usuario_id} no encontrado")
+        req.reabrir(usuario, motivo)
 
-        # Reabrir (validaciones en el dominio)
-        requerimiento.reabrir(usuario, motivo)
-
-        # Crear evento
         evento = EventoFactory.crear_evento(
             tipo=TipoEvento.REAPERTURA,
-            requerimiento=requerimiento,
+            requerimiento=req,
             responsable=usuario,
             motivo=motivo
         )
-        requerimiento.agregar_evento(evento)
+        req.agregar_evento(evento)
 
-        # Guardar
-        requerimiento_actualizado = await self.req_repo.guardar(requerimiento)
+        self.requerimiento_repo.actualizar(req)
 
-        # Notificar
-        await self.notificador.notificar_evento(evento)
+        # Si quien reabre no es el técnico, notificamos al técnico anterior o sus supervisores
+        if req.tecnico_asignado:
+            self.notificacion_service.notificar_accion(evento, req.tecnico_asignado)
 
-        return requerimiento_actualizado
+    # =================================================================
+    # CONSULTAS (READ)
+    # =================================================================
+
+    def obtener_requerimientos_usuario(self, id_usuario: int) -> List[Requerimiento]:
+        """
+        Filtra requerimientos según lo que el usuario 'puede ver'.
+        """
+        usuario = self._get_usuario(id_usuario)
+        todos = self.requerimiento_repo.obtener_todos()
+
+        # Filtrado en memoria usando la regla de negocio polimórfica.
+        # (Nota: En producción real esto se haría en base de datos por performance,
+        # pero para fines académicos demuestra el uso de POO 'puede_ver_requerimiento')
+        return [r for r in todos if usuario.puede_ver_requerimiento(r)]
+
+    # =================================================================
+    # MÉTODOS PRIVADOS (HELPERS)
+    # =================================================================
+
+    def _get_usuario(self, uid):
+        u = self.usuario_repo.obtener_por_id(uid)
+        if not u: raise RecursoNoEncontradoException(f"Usuario {uid} no encontrado")
+        return u
+
+    def _get_requerimiento(self, rid):
+        r = self.requerimiento_repo.obtener_por_id(rid)
+        if not r: raise RecursoNoEncontradoException(f"Requerimiento {rid} no encontrado")
+        return r

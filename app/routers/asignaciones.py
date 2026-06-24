@@ -1,55 +1,70 @@
-from fastapi import APIRouter, Path, Depends
-from app.schemas.asignacion import (
-    AsignarTecnicoRequest,
-    AsignacionResponse,
-    ReasignarTecnicoRequest,
-    DerivarTecnicoRequest,
-    DerivacionResponse
+from fastapi import APIRouter, Depends, HTTPException, Body
+from app.services.requerimiento_service import RequerimientoService
+from app.dependencies import get_requerimiento_service, get_current_user
+from app.domain.entities.usuario import Usuario
+from app.domain.exceptions import (
+    PermisosDenegadosException,
+    EstadoInvalidoException,
+    RecursoNoEncontradoException
 )
-from app.dependencies.auth import verificar_rol_operador, verificar_rol_tecnico
-from app.services.asignacion_service import AsignacionService
-from app.dependencies.services import get_asignacion_service
+from app.schemas.requerimiento import AsignarTecnico, DerivarTecnico, ResolverRequerimiento
 
-router = APIRouter()
+router = APIRouter(prefix="/requerimientos", tags=["Operaciones"])
 
-@router.post("/{id}/asignar", response_model=AsignacionResponse)
-async def asignar_tecnico(
-    id: int = Path(...),
-    request: AsignarTecnicoRequest = None,
-    current_user = Depends(verificar_rol_operador),
-    service: AsignacionService = Depends(get_asignacion_service)
+@router.put("/{id_req}/asignar")
+def asignar_tecnico(
+    id_req: int,
+    datos: AsignarTecnico,
+    service: RequerimientoService = Depends(get_requerimiento_service),
+    current_user: Usuario = Depends(get_current_user)
 ):
-    return await service.asignar_tecnico(
-        requerimiento_id=id,
-        tecnico_id=request.tecnico_id,
-        operador_id=current_user.id,
-        comentario=request.comentario
-    )
+    """
+    Un Operador asigna un técnico.
+    """
+    try:
+        service.asignar_tecnico(
+            id_req=id_req,
+            id_operador=current_user.id,
+            id_tecnico=datos.tecnico_id
+        )
+        return {"mensaje": "Técnico asignado correctamente"}
+    except PermisosDenegadosException as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except EstadoInvalidoException as e:
+        raise HTTPException(status_code=409, detail=str(e)) # 409 Conflict
 
-@router.put("/{id}/asignar", response_model=AsignacionResponse)
-async def reasignar_tecnico(
-    id: int = Path(...),
-    request: ReasignarTecnicoRequest = None,
-    current_user = Depends(verificar_rol_operador),
-    service: AsignacionService = Depends(get_asignacion_service)
+@router.put("/{id_req}/derivar")
+def derivar_requerimiento(
+    id_req: int,
+    datos: DerivarTecnico,
+    service: RequerimientoService = Depends(get_requerimiento_service),
+    current_user: Usuario = Depends(get_current_user)
 ):
-    return await service.reasignar_tecnico(
-        requerimiento_id=id,
-        nuevo_tecnico_id=request.tecnico_id,
-        operador_id=current_user.id,
-        motivo=request.motivo
-    )
+    """
+    Un Técnico deriva a otro (Interconsulta).
+    """
+    try:
+        service.derivar_requerimiento(
+            id_req=id_req,
+            id_tecnico_origen=current_user.id,
+            id_tecnico_destino=datos.tecnico_destino_id,
+            motivo=datos.motivo
+        )
+        return {"mensaje": "Requerimiento derivado correctamente"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
-@router.post("/{id}/derivar", response_model=DerivacionResponse)
-async def derivar_tecnico(
-    id: int = Path(...),
-    request: DerivarTecnicoRequest = None,
-    current_user = Depends(verificar_rol_tecnico),
-    service: AsignacionService = Depends(get_asignacion_service)
+@router.put("/{id_req}/resolver")
+def resolver_requerimiento(
+    id_req: int,
+    service: RequerimientoService = Depends(get_requerimiento_service),
+    current_user: Usuario = Depends(get_current_user)
 ):
-    return await service.derivar_tecnico(
-        requerimiento_id=id,
-        tecnico_origen_id=current_user.id,
-        tecnico_destino_id=request.tecnico_destino_id,
-        motivo=request.motivo
-    )
+    """
+    El Técnico marca como resuelto.
+    """
+    try:
+        service.resolver_requerimiento(id_req, current_user.id)
+        return {"mensaje": "Requerimiento resuelto exitosamente"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))

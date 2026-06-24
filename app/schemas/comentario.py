@@ -1,58 +1,31 @@
-from pydantic import BaseModel, Field, model_validator
-from typing import List
+from pydantic import BaseModel, Field
 from datetime import datetime
-from app.schemas.enums import TipoUsuario
+from app.schemas.usuario import UsuarioRead
+from app.schemas.enums import TipoEvento
 
-class CrearComentarioRequest(BaseModel):
-    texto: str = Field(..., min_length=5, max_length=1000, description="Texto del comentario")
+class ComentarioCreate(BaseModel):
+    contenido: str = Field(..., min_length=1)
 
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "texto": "He verificado el estado de la línea y está activa. Voy a reiniciar el servicio."
-            }
-        }
-
-class AutorInfo(BaseModel):
+class ComentarioRead(BaseModel):
     id: int
-    nombre: str
-    tipoUsuario: TipoUsuario
+    contenido: str
+    autor: UsuarioRead # Anidación de objetos
+    fecha_hora: datetime
 
     class Config:
         from_attributes = True
 
-    @model_validator(mode='before')
-    def map_domain(cls, v):
-        if hasattr(v, 'get_tipo_usuario') and not isinstance(v, dict):
-            return {
-                "id": v.id,
-                "nombre": v.nombre,
-                "tipoUsuario": v.get_tipo_usuario()
-            }
-        return v
-
-
-class ComentarioResponse(BaseModel):
-    id: int
-    texto: str
-    autor: AutorInfo
-    fechaHora: datetime
+class EventoRead(BaseModel):
+    """
+    Historial de acciones.
+    Usamos 'descripcion_detallada' que viene del polimorfismo del dominio.
+    """
+    titulo: str
+    descripcion: str = Field(alias="get_descripcion_detallada")
+    tipo: TipoEvento = Field(alias="get_tipo_evento")
+    responsable: UsuarioRead
+    fecha_hora: datetime
 
     class Config:
         from_attributes = True
-
-    @model_validator(mode='before')
-    def map_domain(cls, v):
-        if hasattr(v, 'texto') and not isinstance(v, dict):
-            return {
-                "id": v.id,
-                "texto": v.texto,
-                "autor": v.autor,
-                "fechaHora": v.fecha_hora
-            }
-        return v
-
-class ListaComentariosResponse(BaseModel):
-    requerimientoId: int
-    comentarios: List[ComentarioResponse]
-    totalComentarios: int
+        populate_by_name = True

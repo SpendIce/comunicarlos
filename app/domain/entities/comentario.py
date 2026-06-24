@@ -1,50 +1,39 @@
 from datetime import datetime
 from typing import Optional
+from app.domain.exceptions import ValidacionException
 
 
 class Comentario:
-    """Comentario en un requerimiento - Inmutable después de creado"""
+    """
+    Representa una interacción textual dentro de un requerimiento.
+
+    Regla de Negocio:
+    - Inmutabilidad: No tiene setters. Lo dicho, dicho está (Auditabilidad).
+    - Preserva la identidad del autor y el momento exacto.
+    """
 
     def __init__(
             self,
             id: Optional[int],
-            texto: str,
-            autor,  # Usuario
-            requerimiento,  # Requerimiento
-            fecha_hora: Optional[datetime] = None
+            contenido: Optional[str] = None,
+            autor=None,  # Usuario
+            requerimiento=None,
+            fecha_hora: Optional[datetime] = None,
+            texto: Optional[str] = None
     ):
+        contenido = texto if texto is not None else contenido
+        if not contenido or len(contenido.strip()) == 0:
+            raise ValidacionException("No se puede registrar un comentario vacío.")
+
         self.id = id
-        self._texto = texto
-        self._autor = autor
-        self._requerimiento = requerimiento
-        self._fecha_hora = fecha_hora or datetime.now()
-
-        # Validaciones
-        if len(texto.strip()) < 5:
-            raise ValueError("El comentario debe tener al menos 5 caracteres")
-
-    @property
-    def texto(self) -> str:
-        """Comentario es inmutable"""
-        return self._texto
-
-    @property
-    def autor(self):
-        """Autor es inmutable"""
-        return self._autor
-
-    @property
-    def requerimiento(self):
-        """Requerimiento es inmutable"""
-        return self._requerimiento
-
-    @property
-    def fecha_hora(self) -> datetime:
-        """Fecha es inmutable"""
-        return self._fecha_hora
+        self.contenido = contenido
+        self.texto = contenido
+        self.autor = autor
+        self.requerimiento = requerimiento
+        self.fecha_hora = fecha_hora or datetime.now()
 
     def __str__(self) -> str:
-        return f"{self.autor.nombre}: {self.texto[:50]}..."
+        return f"{self.autor.nombre} ({self.fecha_hora}): {self.texto[:20]}..."
 
     def __repr__(self) -> str:
-        return f"<Comentario(id={self.id}, autor='{self.autor.nombre}', fecha='{self.fecha_hora}')>"
+        return f"<Comentario(id={self.id}, autor='{self.autor.email}')>"

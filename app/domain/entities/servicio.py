@@ -5,7 +5,9 @@ from app.domain.exceptions import ServicioException
 
 
 class Servicio:
-    """Servicio suscrito por un solicitante"""
+    """
+    Producto o servicio contratado por un Solicitante.
+    """
 
     def __init__(
             self,
@@ -16,41 +18,42 @@ class Servicio:
             activo: bool = True,
             fecha_alta: Optional[datetime] = None
     ):
+        self._validar_numero(numero_servicio)
+
         self.id = id
         self.tipo = tipo
         self.numero_servicio = numero_servicio
         self.solicitante = solicitante
-        self.activo = activo
+        self._activo = activo  # Protegido, acceso vía propiedades/métodos
         self.fecha_alta = fecha_alta or datetime.now()
 
-        # Validaciones
-        if len(numero_servicio) < 5:
-            raise ServicioException("El número de servicio debe tener al menos 5 caracteres")
+    def _validar_numero(self, numero: str):
+        if len(numero) < 5:
+            raise ServicioException("El número de servicio es inválido (muy corto).")
+
+    # --- Encapsulamiento de Estado ---
+
+    @property
+    def activo(self) -> bool:
+        """Propiedad de solo lectura pública."""
+        return self._activo
 
     def activar(self) -> None:
-        """Activa el servicio"""
-        if self.activo:
-            raise ServicioException("El servicio ya está activo")
-        self.activo = True
+        """Transición de estado controlada."""
+        if self._activo:
+            raise ServicioException("El servicio ya se encuentra activo.")
+        self._activo = True
 
     def desactivar(self) -> None:
-        """Desactiva el servicio"""
-        if not self.activo:
-            raise ServicioException("El servicio ya está inactivo")
-        self.activo = False
+        """Transición de estado controlada."""
+        if not self._activo:
+            raise ServicioException("El servicio ya se encuentra inactivo.")
+        self._activo = False
 
-    def esta_activo(self) -> bool:
-        """Verifica si el servicio está activo"""
-        return self.activo
-
-    def get_dias_desde_alta(self) -> int:
-        """Calcula los días desde que fue dado de alta"""
-        delta = datetime.now() - self.fecha_alta
-        return delta.days
+    def get_antiguedad_dias(self) -> int:
+        """Calcula la antigüedad para reglas de prioridad (ej: Solicitudes)."""
+        return (datetime.now() - self.fecha_alta).days
 
     def __str__(self) -> str:
-        estado = "Activo" if self.activo else "Inactivo"
-        return f"{self.tipo.value} ({self.numero_servicio}) - {estado}"
-
-    def __repr__(self) -> str:
-        return f"<Servicio(id={self.id}, tipo='{self.tipo.value}', activo={self.activo})>"
+        estado_str = "ACTIVO" if self._activo else "INACTIVO"
+        return f"{self.tipo.value} [{self.numero_servicio}] - {estado_str}"
